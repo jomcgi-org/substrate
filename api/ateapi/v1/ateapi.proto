@@ -1328,12 +1328,12 @@ enum ForkRole {
 
 // ActorFork is the fork state of an Actor of a template with fork_config.
 message ActorFork {
-  // role says whether the Actor is a seed or a forked actor.
+  // role says whether the Actor is a seed or a forked actor. Only the control
+  // plane sets it, at creation, and it never changes.
   //
   // +k8s:required
   // +k8s:minimum=1
   // +k8s:maximum=2 # keep this in sync with the ForkRole enum
-  // +k8s:immutable
   ForkRole role = 1;
 
   // start_time is when the forked actor became RUNNING. The reaper measures
@@ -1359,7 +1359,6 @@ message ActorFork {
   //
   // +k8s:optional
   // +k8s:beta(since: "0.0")=+k8s:subfield(atespace)=+k8s:forbidden # TODO: get rid of beta prefix
-  // +k8s:immutable
   ObjectRef pinned_worker = 5;
 }
 
