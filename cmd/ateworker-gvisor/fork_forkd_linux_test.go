@@ -94,6 +94,7 @@ echo 1 >&3
 E=$(/busybox tr '\0' '\n' </proc/gvisor/spec_environ)
 v() { echo "$E" | /busybox sed -n "s/^$1=//p"; }
 /busybox echo READY
+/busybox echo MEMTOTAL_KB=$(/busybox sed -n 's/^MemTotal: *\([0-9]*\) kB.*/\1/p' /proc/meminfo)
 [ -n "$(v ATE_ACTOR_T_EXIT_NOW)" ] && exit $(v ATE_ACTOR_T_EXIT_NOW)
 [ -n "$(v ATE_ACTOR_T_ALLOC_MB)" ] && /busybox dd if=/dev/zero of=/tmp/big bs=1M count=$(v ATE_ACTOR_T_ALLOC_MB) 2>/dev/null
 if [ -n "$(v ATE_ACTOR_T_EGRESS)" ]; then
@@ -617,8 +618,15 @@ func TestRealForkdSingleUseChild(t *testing.T) {
 	}
 
 	waitFor(t, "the guest to serve", func() bool { out, _ := f.logOf(uid); return strings.Contains(out, "SERVING") })
-	if out, _ := f.logOf(uid); !strings.Contains(out, "READY") {
+	out, _ := f.logOf(uid)
+	if !strings.Contains(out, "READY") {
 		t.Errorf("child stdout = %q", out)
+	}
+	// The guest sees the seed's memory.max as its memory.
+	if i := strings.Index(out, "MEMTOTAL_KB="); i < 0 {
+		t.Errorf("child stdout has no MemTotal: %q", out)
+	} else if kb, err := strconv.Atoi(strings.Fields(out[i+len("MEMTOTAL_KB="):])[0]); err != nil || kb > 1<<20 || kb < 1<<19 {
+		t.Errorf("guest MemTotal = %q kB, want about the seed's 1Gi (%d kB)", out[i:i+30], 1<<20)
 	}
 	code, body, err := f.get(uid, "GET", "/", nil)
 	if err != nil || code != 200 || string(body) != "ok" {
