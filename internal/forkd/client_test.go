@@ -25,6 +25,9 @@ import (
 	"go.ate.dev/substrate/internal/forkd/forkdtest"
 )
 
+// childLimits is the least forkd accepts for a child.
+var childLimits = &forkd.Cgroup{MemoryMax: 1 << 28, PidsMax: 64}
+
 func TestClient(t *testing.T) {
 	fake, socket := forkdtest.Serve(t)
 	c := forkd.NewClient(socket)
@@ -34,18 +37,18 @@ func TestClient(t *testing.T) {
 	if err != nil || hello.Platform != "kvm" || hello.ProtocolVersion != forkd.ProtocolVersion {
 		t.Fatalf("Hello() = %+v, %v", hello, err)
 	}
-	seed, err := c.Seed(ctx, &forkd.SeedRequest{SeedID: "seed-1", Image: "/img", ImageSHA256: "ab", Args: []string{"/bin/app"}})
+	seed, err := c.Seed(ctx, &forkd.SeedRequest{SeedID: "seed-1", Image: "/img", ImageSHA256: "ab", Args: []string{"/bin/app"}, Cgroup: &forkd.Cgroup{MemoryMax: 1 << 30}})
 	if err != nil || seed.State != forkd.StateReady || seed.PID == 0 {
 		t.Fatalf("Seed() = %+v, %v", seed, err)
 	}
-	if _, err := c.Seed(ctx, &forkd.SeedRequest{SeedID: "seed-1"}); !forkd.IsCode(err, forkd.CodeAlreadyExists) {
+	if _, err := c.Seed(ctx, &forkd.SeedRequest{SeedID: "seed-1", Cgroup: &forkd.Cgroup{MemoryMax: 1 << 30}}); !forkd.IsCode(err, forkd.CodeAlreadyExists) {
 		t.Errorf("a second seed of one id = %v, want already_exists", err)
 	}
-	child, err := c.Fork(ctx, &forkd.ForkRequest{SeedID: "seed-1", ChildID: "child-1", Env: []string{"A=b"}})
+	child, err := c.Fork(ctx, &forkd.ForkRequest{SeedID: "seed-1", ChildID: "child-1", Env: []string{"A=b"}, Cgroup: childLimits})
 	if err != nil || child.State != forkd.StateRunning || child.StdoutPath == "" {
 		t.Fatalf("Fork() = %+v, %v", child, err)
 	}
-	if _, err := c.Fork(ctx, &forkd.ForkRequest{SeedID: "nope", ChildID: "child-2"}); !forkd.IsCode(err, forkd.CodeNotFound) {
+	if _, err := c.Fork(ctx, &forkd.ForkRequest{SeedID: "nope", ChildID: "child-2", Cgroup: childLimits}); !forkd.IsCode(err, forkd.CodeNotFound) {
 		t.Errorf("a fork of an unknown seed = %v, want not_found", err)
 	}
 
@@ -93,10 +96,10 @@ func TestClient(t *testing.T) {
 func TestClientCallsFailWhenForkdIsGone(t *testing.T) {
 	fake, socket := forkdtest.Serve(t)
 	c := forkd.NewClient(socket)
-	if _, err := c.Seed(t.Context(), &forkd.SeedRequest{SeedID: "s"}); err != nil {
+	if _, err := c.Seed(t.Context(), &forkd.SeedRequest{SeedID: "s", Cgroup: &forkd.Cgroup{MemoryMax: 1 << 30}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Fork(t.Context(), &forkd.ForkRequest{SeedID: "s", ChildID: "c"}); err != nil {
+	if _, err := c.Fork(t.Context(), &forkd.ForkRequest{SeedID: "s", ChildID: "c", Cgroup: childLimits}); err != nil {
 		t.Fatal(err)
 	}
 	// A wait in flight ends with an error when forkd goes.
@@ -120,10 +123,10 @@ func TestClientCallsFailWhenForkdIsGone(t *testing.T) {
 func TestClientContext(t *testing.T) {
 	_, socket := forkdtest.Serve(t)
 	c := forkd.NewClient(socket)
-	if _, err := c.Seed(t.Context(), &forkd.SeedRequest{SeedID: "s"}); err != nil {
+	if _, err := c.Seed(t.Context(), &forkd.SeedRequest{SeedID: "s", Cgroup: &forkd.Cgroup{MemoryMax: 1 << 30}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Fork(t.Context(), &forkd.ForkRequest{SeedID: "s", ChildID: "c"}); err != nil {
+	if _, err := c.Fork(t.Context(), &forkd.ForkRequest{SeedID: "s", ChildID: "c", Cgroup: childLimits}); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)

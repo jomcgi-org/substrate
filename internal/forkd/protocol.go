@@ -15,7 +15,7 @@
 // Package forkd is the client of forkd, the daemon in the gVisor fork that
 // holds seed sandboxes and forks single-use child sandboxes from them. The
 // types mirror the wire schema in runsc/forkd/protocol.go of
-// github.com/jomcgi-org/gvisor, version 1. The protocol is JSON over a Unix
+// github.com/jomcgi-org/gvisor, version 2. The protocol is JSON over a Unix
 // stream socket. Each message is a 4-byte big-endian length and one JSON
 // object. A connection serves one request at a time.
 package forkd
@@ -28,7 +28,8 @@ import (
 )
 
 // ProtocolVersion is the version of the wire protocol this package speaks.
-const ProtocolVersion = 1
+// Version 2 adds the seed's cgroup and requires memory_max in every cgroup.
+const ProtocolVersion = 2
 
 // MaxFrameBytes bounds one message.
 const MaxFrameBytes = 1 << 20
@@ -121,6 +122,9 @@ type SeedRequest struct {
 	DropCapabilities bool     `json:"drop_capabilities,omitempty"`
 	Tmpfs            []Tmpfs  `json:"tmpfs,omitempty"`
 
+	// Cgroup limits the seed's processes. MemoryMax is required.
+	Cgroup *Cgroup `json:"cgroup,omitempty"`
+
 	Workers int `json:"workers,omitempty"`
 	CPUs    int `json:"cpus,omitempty"`
 }
@@ -144,7 +148,8 @@ type ForkRequest struct {
 	LogBytesLimit int64 `json:"log_bytes_limit,omitempty"`
 }
 
-// Cgroup are the limits of a child's cgroup.
+// Cgroup are the limits of a seed's or a child's cgroup. MemoryMax kills,
+// MemoryHigh only throttles, so forkd refuses a cgroup without MemoryMax.
 type Cgroup struct {
 	CPUMax     string `json:"cpu_max,omitempty"`
 	MemoryHigh int64  `json:"memory_high,omitempty"`
@@ -208,6 +213,8 @@ type SeedInfo struct {
 	ReadyMS     int64  `json:"ready_ms"`
 	CreatedUnix int64  `json:"created_unix_ms"`
 	Children    int    `json:"children"`
+	CgroupPath  string `json:"cgroup_path,omitempty"`
+	OOMKills    int64  `json:"oom_kills,omitempty"`
 }
 
 // ChildInfo describes a child.

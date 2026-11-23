@@ -230,6 +230,10 @@ func (f *Fake) seed(req *forkd.SeedRequest) *forkd.Response {
 	if f.SeedErr != nil {
 		return &forkd.Response{Error: f.SeedErr}
 	}
+	// forkd refuses a seed whose cgroup has no memory_max.
+	if req.Cgroup == nil || req.Cgroup.MemoryMax <= 0 {
+		return fail(forkd.CodeInvalidArgument, "cgroup: a cgroup with memory_max is required")
+	}
 	if _, ok := f.seeds[req.SeedID]; ok {
 		return fail(forkd.CodeAlreadyExists, req.SeedID)
 	}
@@ -249,6 +253,10 @@ func (f *Fake) fork(req *forkd.ForkRequest) *forkd.Response {
 	f.forkReqs = append(f.forkReqs, *req)
 	if f.ForkErr != nil {
 		return &forkd.Response{Error: f.ForkErr}
+	}
+	// forkd refuses a child whose cgroup lacks pids_max or memory_max.
+	if cg := req.Cgroup; cg == nil || cg.MemoryMax <= 0 || cg.PidsMax <= 0 {
+		return fail(forkd.CodeInvalidArgument, "cgroup: a cgroup with pids_max and memory_max is required")
 	}
 	s, ok := f.seeds[req.SeedID]
 	if !ok {
