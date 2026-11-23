@@ -24,6 +24,19 @@ import (
 // (which family a pool runs) and SandboxConfig (which family a config is for).
 type SandboxClass string
 
+// SandboxPlatform selects the platform the sandboxes of a gVisor pool run on.
+type SandboxPlatform string
+
+const (
+	// SandboxPlatformSystrap is the default gVisor platform.
+	SandboxPlatformSystrap SandboxPlatform = "systrap"
+
+	// SandboxPlatformKVM runs seed sandboxes and the actors forked from them
+	// on /dev/kvm, which the worker pods of the pool are given. Actors that are
+	// not forked stay on systrap.
+	SandboxPlatformKVM SandboxPlatform = "kvm"
+)
+
 const (
 	// SandboxClassGvisor is the gVisor/runsc runtime (cmd/ateworker-gvisor). Default.
 	SandboxClassGvisor SandboxClass = sandboxclass.GVisor

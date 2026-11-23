@@ -167,6 +167,9 @@ func buildDeploymentApplyConfig(wp *atev1.WorkerPool, otel workerOTelSettings, s
 	}
 	previewArg := "--preview=" + strings.Join(enabledGates(), ",")
 	args = append(args, previewArg)
+	if wp.Spec.KVMPlatform() {
+		args = append(args, "--fork-platform="+string(atev1.SandboxPlatformKVM))
+	}
 
 	containerAC := corev1ac.Container().
 		WithName("worker").
@@ -188,7 +191,7 @@ func buildDeploymentApplyConfig(wp *atev1.WorkerPool, otel workerOTelSettings, s
 			WithHTTPGet(corev1ac.HTTPGetAction().
 				WithPath("/readyz").
 				WithPort(intstr.FromString("readyz")))).
-		WithSecurityContext(workerSecurityContext(wp.Spec.DefaultSandboxClass())).
+		WithSecurityContext(workerSecurityContext(wp.Spec.DefaultSandboxClass(), wp.Spec.KVMPlatform())).
 		WithEnv(workerContainerEnv(otel)...).
 		WithVolumeMounts(
 			corev1ac.VolumeMount().
@@ -260,6 +263,9 @@ func buildDeploymentApplyConfig(wp *atev1.WorkerPool, otel workerOTelSettings, s
 	applyWorkerPoolPodTemplate(podSpecAC, containerAC, wp.Spec.Template)
 	applySandboxClassToleration(podSpecAC, wp.Spec.DefaultSandboxClass())
 	maybeApplyMicroVMPodShape(podSpecAC, containerAC, wp.Spec.DefaultSandboxClass())
+	if wp.Spec.KVMPlatform() {
+		applyKVMPlatform(containerAC)
+	}
 	podSpecAC.WithContainers(containerAC)
 	podSpecAC.WithTerminationGracePeriodSeconds(workerTerminationGracePeriodSeconds)
 
@@ -397,6 +403,11 @@ var workerGvisorCapabilities = []corev1.Capability{
 	"FOWNER", "CHOWN", "NET_RAW", "SETFCAP",
 }
 
+// workerKVMPlatformCapabilities are what forkd asserts it holds besides the
+// gVisor worker set: SYS_CHROOT for the sentry's chroot and SETPCAP to drop its
+// bounding set. Only workers of a pool with platform kvm get them.
+var workerKVMPlatformCapabilities = []corev1.Capability{"SYS_CHROOT", "SETPCAP"}
+
 // workerMicroVMCapabilities retains virtiofsd's eight default child
 // capabilities, plus NET_ADMIN and SYS_ADMIN for worker networking and mounts.
 // MKNOD and FSETID preserve guest device-node creation and setgid files.
@@ -422,7 +433,7 @@ var workerMicroVMCapabilities = []corev1.Capability{
 // class. Neither class runs privileged; they differ in their capability set.
 // Both declare seccomp Unconfined because their sandbox child pivot_root()s,
 // which the default profile denies. An empty class defaults to gVisor.
-func workerSecurityContext(class atev1.SandboxClass) *corev1ac.SecurityContextApplyConfiguration {
+func workerSecurityContext(class atev1.SandboxClass, kvmPlatform bool) *corev1ac.SecurityContextApplyConfiguration {
 	// Both runtimes mount inside the worker — runsc pivots root and the worker
 	// remounts /sys/fs/cgroup to nest per-actor cgroups; the micro-VM worker
 	// shares /run/kata-containers and remounts /proc/sys — and the default
@@ -459,10 +470,14 @@ func workerSecurityContext(class atev1.SandboxClass) *corev1ac.SecurityContextAp
 	// capabilities the worker holds, and the sandbox then dies during startup.
 	// Declare Unconfined explicitly so the worker does not depend on the cluster
 	// leaving the profile unset.
+	caps := workerGvisorCapabilities
+	if kvmPlatform {
+		caps = append(slices.Clone(caps), workerKVMPlatformCapabilities...)
+	}
 	return sc.
 		WithCapabilities(corev1ac.Capabilities().
 			WithDrop("ALL").
-			WithAdd(workerGvisorCapabilities...)).
+			WithAdd(caps...)).
 		WithSeccompProfile(corev1ac.SeccompProfile().
 			WithType(corev1.SeccompProfileTypeUnconfined))
 }
@@ -529,6 +544,14 @@ func maybeApplyMicroVMPodShape(
 	// Extended resources constrain where this pod fits but repel nothing, so a
 	// cluster reserving nested-virt nodes with a taint also needs the toleration
 	// that applySandboxClassToleration adds for every class.
+}
+
+// applyKVMPlatform gives a gVisor worker of a KVM pool /dev/kvm, as an
+// extended resource atelet's device plugin serves for the reasons
+// maybeApplyMicroVMPodShape gives. Placement follows the request: only nodes
+// that have the device advertise it.
+func applyKVMPlatform(containerAC *corev1ac.ContainerApplyConfiguration) {
+	addDeviceResourceLimits(containerAC, deviceplugin.ResourceKVM)
 }
 
 // sandboxClassTaintKey is the taint key a cluster puts on a node pool reserved

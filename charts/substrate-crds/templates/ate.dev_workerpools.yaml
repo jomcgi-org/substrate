@@ -112,9 +112,23 @@ spec:
                       - gvisor
                       - microvm
                       type: string
+                    platform:
+                      description: |-
+                        platform selects the platform of a gVisor pool. "kvm" gives the worker
+                        pods /dev/kvm so they can hold seed sandboxes and fork actors from them
+                        (preview gate ForkSeed), and also the SYS_CHROOT and SETPCAP capabilities
+                        forkd needs. Actors that are not forked still run on systrap. Unset is
+                        "systrap". Only the gvisor class has a platform.
+                      enum:
+                      - systrap
+                      - kvm
+                      type: string
                   required:
                   - name
                   type: object
+                  x-kubernetes-validations:
+                  - message: platform is only for the gvisor class
+                    rule: '!has(self.platform) || self.name == ''gvisor'''
                 maxItems: 1
                 minItems: 1
                 type: array

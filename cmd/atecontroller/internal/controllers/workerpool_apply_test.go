@@ -16,6 +16,7 @@ package controllers
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1174,5 +1175,68 @@ func TestBuildDeploymentPreview(t *testing.T) {
 				t.Errorf("--preview args mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// A gVisor pool on the KVM platform gets /dev/kvm from the device plugin, the
+// capabilities forkd asserts and --fork-platform. A pool without a platform,
+// on systrap, or of another class gets none of them.
+func TestKVMPlatformPodShape(t *testing.T) {
+	tests := []struct {
+		name     string
+		class    atev1.SandboxClass
+		platform atev1.SandboxPlatform
+		want     bool
+	}{
+		{"gvisor, no platform", atev1.SandboxClassGvisor, "", false},
+		{"gvisor on systrap", atev1.SandboxClassGvisor, atev1.SandboxPlatformSystrap, false},
+		{"gvisor on kvm", atev1.SandboxClassGvisor, atev1.SandboxPlatformKVM, true},
+		// The CRD refuses this pair; the controller does not act on it either.
+		{"microvm with a platform", atev1.SandboxClassMicroVM, atev1.SandboxPlatformKVM, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wp := testWorkerPoolApplyConfig(&atev1.WorkerPoolPodTemplate{
+				Resources: &corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")}},
+			})
+			wp.Spec.SandboxClasses = []atev1.WorkerPoolSandboxClass{{Name: tt.class, Platform: tt.platform}}
+			c := buildDeploymentApplyConfig(wp, workerOTelSettings{}, installdefaults.SystemNamespace, installdefaults.AteletServiceAccount, installdefaults.RouterServiceAccount, egresspolicy.DNSEgressPolicyEnforceInAtunnel).Spec.Template.Spec.Containers[0]
+
+			hasArg := slices.Contains(c.Args, "--fork-platform=kvm")
+			_, hasDevice := deviceLimit(c, deviceplugin.ResourceKVM)
+			if tt.class == atev1.SandboxClassMicroVM {
+				hasDevice = false // the micro-VM class has its own KVM request
+			}
+			hasCaps := slices.Contains(c.SecurityContext.Capabilities.Add, "SYS_CHROOT") && slices.Contains(c.SecurityContext.Capabilities.Add, "SETPCAP")
+			if tt.class == atev1.SandboxClassMicroVM {
+				hasCaps = false // SETPCAP is in the micro-VM set already
+			}
+			if hasArg != tt.want || hasDevice != tt.want || hasCaps != tt.want {
+				t.Errorf("fork-platform arg = %v, /dev/kvm = %v, forkd capabilities = %v, want all %v", hasArg, hasDevice, hasCaps, tt.want)
+			}
+			if tt.want {
+				if got, _ := deviceLimit(c, string(corev1.ResourceMemory)); got != "2Gi" {
+					t.Errorf("memory limit = %q, want the template's 2Gi kept", got)
+				}
+				for _, cap := range workerGvisorCapabilities {
+					if !slices.Contains(c.SecurityContext.Capabilities.Add, cap) {
+						t.Errorf("a KVM pool dropped the gVisor capability %s", cap)
+					}
+				}
+			}
+		})
+	}
+}
+
+// The KVM platform adds exactly two capabilities, and a systrap pool keeps the
+// set it had.
+func TestWorkerSecurityContextKVMPlatform(t *testing.T) {
+	plain := workerSecurityContext(atev1.SandboxClassGvisor, false).Capabilities.Add
+	kvm := workerSecurityContext(atev1.SandboxClassGvisor, true).Capabilities.Add
+	if diff := cmp.Diff(append(slices.Clone(plain), "SYS_CHROOT", "SETPCAP"), kvm); diff != "" {
+		t.Errorf("KVM capabilities mismatch (-want +got):\n%s", diff)
+	}
+	if len(workerGvisorCapabilities) != len(plain) {
+		t.Error("building a KVM security context changed the shared gVisor capability list")
 	}
 }

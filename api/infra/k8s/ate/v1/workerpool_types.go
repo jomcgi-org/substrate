@@ -114,6 +114,8 @@ type WorkerPoolSpec struct {
 }
 
 // WorkerPoolSandboxClass is one sandbox runtime family a WorkerPool runs.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.platform) || self.name == 'gvisor'",message="platform is only for the gvisor class"
 type WorkerPoolSandboxClass struct {
 	// name selects the sandbox runtime family, which drives the worker pod
 	// shape (KVM/vhost device mounts and node placement). The concrete binary
@@ -123,6 +125,16 @@ type WorkerPoolSandboxClass struct {
 	// +required
 	// +kubebuilder:validation:Enum=gvisor;microvm
 	Name SandboxClass `json:"name,omitempty"`
+
+	// platform selects the platform of a gVisor pool. "kvm" gives the worker
+	// pods /dev/kvm so they can hold seed sandboxes and fork actors from them
+	// (preview gate ForkSeed), and also the SYS_CHROOT and SETPCAP capabilities
+	// forkd needs. Actors that are not forked still run on systrap. Unset is
+	// "systrap". Only the gvisor class has a platform.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=systrap;kvm
+	Platform SandboxPlatform `json:"platform,omitempty"`
 
 	// configRef names a cluster-scoped SandboxConfig for this sandbox class.
 	// The referenced config's SandboxClass must match Name. When omitted, the
@@ -152,6 +164,12 @@ func (s *WorkerPoolSpec) DefaultSandboxClass() SandboxClass {
 		return ""
 	}
 	return s.SandboxClasses[0].Name
+}
+
+// KVMPlatform reports whether the pool's sandbox class is a gVisor class on
+// the KVM platform, which holds seeds and forks actors from them.
+func (s *WorkerPoolSpec) KVMPlatform() bool {
+	return len(s.SandboxClasses) > 0 && s.SandboxClasses[0].Name == SandboxClassGvisor && s.SandboxClasses[0].Platform == SandboxPlatformKVM
 }
 
 // ResolvedSandboxConfig returns the name of the SandboxConfig the controller
