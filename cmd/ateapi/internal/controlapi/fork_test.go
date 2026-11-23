@@ -117,7 +117,6 @@ type forkFixture struct {
 	workflow *ActorWorkflow
 	impl     *ServiceImpl
 	template *ateapi.ActorTemplate
-	worker   *ateapi.Worker
 }
 
 func forkTemplateSpec(mutations ...func(*ateapi.ActorTemplate)) *ateapi.ActorTemplate {

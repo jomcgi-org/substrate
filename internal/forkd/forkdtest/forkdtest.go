@@ -88,7 +88,7 @@ func Serve(t *testing.T) (*Fake, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "forkd.sock")
 	lis, err := net.Listen("unix", socket)
 	if err != nil {
