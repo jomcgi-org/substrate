@@ -60,15 +60,25 @@ slice.
   `--mkfs-erofs`), which the atelet image must carry.
 - ateworker-gvisor: `SeedWorkload`, `ForkWorkload`, `DropSeed`, with
   `--fork-platform=kvm`. It starts `forkd` from `gvisor-bin/forkd` of the
-  SandboxConfig tarball and speaks the forkd protocol of the gVisor fork
-  (`internal/forkd`).
+  SandboxConfig tarball and speaks version 2 of the forkd protocol of the gVisor
+  fork (`internal/forkd`). forkd runs the seed in its own cgroup with
+  `memory.max` set to `seed_resources`, which the guest sees as its memory.
+  A forked actor gets `memory.max` of its limit plus `fork_overhead`. Only
+  `memory.max` kills: a cgroup above `memory.high` is throttled, so forkd
+  refuses a limit without `memory.max`.
 - WorkerPool: `platform: kvm` gives the worker pods `/dev/kvm`, `SYS_CHROOT`
   and `SETPCAP`.
 
+## Test against a real forkd
+
+`cmd/ateworker-gvisor/fork_forkd_linux_test.go` runs the fork manager with the
+real forkd, runsc and worker network on a host with KVM. It needs root, cgroup
+v2, `mkfs.erofs` and a static `busybox` on `PATH`, and `ATE_TEST_FORKD_DIR`
+naming a directory with `runsc` and `gvisor-bin/{forkd,gvisor_sentry}`. The
+engine test also needs `ATE_TEST_ENGINE_IMAGE` and `ATE_TEST_ENGINE_BODY`.
+
 ## Not done yet
 
-- A seed's memory is not capped by a cgroup of its own: the forkd protocol has
-  no per-seed cgroup, so the seed lives in forkd's parent cgroup.
 - Resource usage of forked actors is not sampled.
 - No pool of pre-forked actors, and no egress.
 - The seed reconciler and the reaper list every template and Actor of the fork
