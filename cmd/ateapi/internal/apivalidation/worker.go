@@ -96,6 +96,11 @@ func ValidateReportActorCrashedRequest(ctx context.Context, req *ateapi.ReportAc
 	return Validate_ReportActorCrashedRequest(ctx, op, nil, req, nil)
 }
 
+func ValidateReportActorExitedRequest(ctx context.Context, req *ateapi.ReportActorExitedRequest) field.ErrorList {
+	op := operation.Operation{Type: operation.Create}
+	return Validate_ReportActorExitedRequest(ctx, op, nil, req, nil)
+}
+
 func ValidateMarkWorkerAvailableRequest(ctx context.Context, req *ateapi.MarkWorkerAvailableRequest) field.ErrorList {
 	// Call the generated validation.
 	op := operation.Operation{Type: operation.Create}

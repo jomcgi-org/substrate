@@ -57,11 +57,8 @@ func validateForkTemplate(fldPath *field.Path, tmpl *ateapi.ActorTemplate) field
 	}
 	forkPath := fldPath.Child("fork_config")
 	var errs field.ErrorList
-	if !fork.GetSingleUse() {
-		errs = append(errs, field.Invalid(forkPath.Child("single_use"), false, "must be true"))
-	}
 	if fork.GetEgress() == ateapi.ForkEgress_FORK_EGRESS_GATEWAY {
-		errs = append(errs, field.NotSupported(forkPath.Child("egress"), fork.GetEgress(),
+		errs = append(errs, field.NotSupported(forkPath.Child("egress"), fork.GetEgress().String(),
 			[]string{ateapi.ForkEgress_FORK_EGRESS_UNSPECIFIED.String(), ateapi.ForkEgress_FORK_EGRESS_NONE.String()}))
 	}
 	if len(tmpl.GetContainers()) != 1 {

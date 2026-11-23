@@ -796,6 +796,61 @@ func TestValidateRequestActorSuspendRequest(t *testing.T) {
 	}
 }
 
+func TestValidateReportActorExitedRequest(t *testing.T) {
+	valid := func(mutate ...func(*ateapi.ReportActorExitedRequest)) *ateapi.ReportActorExitedRequest {
+		r := &ateapi.ReportActorExitedRequest{
+			Worker:   workerRef(apiWorkerName),
+			Actor:    &ateapi.ObjectRef{Atespace: "team-a", Name: "actor-1"},
+			ActorUid: apiOtherWorkerName,
+			ExitCode: 3,
+		}
+		for _, m := range mutate {
+			m(r)
+		}
+		return r
+	}
+	tests := []struct {
+		name string
+		req  *ateapi.ReportActorExitedRequest
+		want field.ErrorList
+	}{{
+		name: "valid",
+		req:  valid(),
+	}, {
+		name: "valid zero exit code",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.ExitCode = 0 }),
+	}, {
+		name: "missing worker",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.Worker = nil }),
+		want: field.ErrorList{field.Required(field.NewPath("worker"), "")},
+	}, {
+		name: "worker.atespace must be empty",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.Worker.Atespace = "team-a" }),
+		want: field.ErrorList{field.Forbidden(field.NewPath("worker", "atespace"), "")},
+	}, {
+		name: "missing actor.atespace",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.Actor.Atespace = "" }),
+		want: field.ErrorList{field.Required(field.NewPath("actor", "atespace"), "")},
+	}, {
+		name: "missing actor_uid",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.ActorUid = "" }),
+		want: field.ErrorList{field.Required(field.NewPath("actor_uid"), "")},
+	}, {
+		name: "exit code too large",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.ExitCode = 256 }),
+		want: field.ErrorList{field.Invalid(field.NewPath("exit_code"), nil, "").WithOrigin("maximum")},
+	}, {
+		name: "negative exit code",
+		req:  valid(func(r *ateapi.ReportActorExitedRequest) { r.ExitCode = -1 }),
+		want: field.ErrorList{field.Invalid(field.NewPath("exit_code"), nil, "").WithOrigin("minimum")},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertValidateErr(t, ValidateReportActorExitedRequest(context.Background(), tt.req), tt.want)
+		})
+	}
+}
+
 func TestValidateReportActorSnapshotStateRequest(t *testing.T) {
 	report := func(gen int32) *ateapi.SnapshotReport {
 		return &ateapi.SnapshotReport{
