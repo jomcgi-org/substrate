@@ -474,10 +474,6 @@ func Validate_ActorFork(
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
-				errs = append(errs, e...)
-				earlyReturn = true
-			}
 			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
 				errs = append(errs, e...)
 				earlyReturn = true
@@ -597,10 +593,6 @@ func Validate_ActorFork(
 			}
 			// call field-attached validations
 			earlyReturn := false
-			if e := validate.Immutable(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
-				errs = append(errs, e...)
-				earlyReturn = true
-			}
 			if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
 				earlyReturn = true
 			}

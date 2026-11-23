@@ -3228,12 +3228,12 @@ func (x *ForkConfig) GetEgress() ForkEgress {
 // ActorFork is the fork state of an Actor of a template with fork_config.
 type ActorFork struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// role says whether the Actor is a seed or a forked actor.
+	// role says whether the Actor is a seed or a forked actor. Only the control
+	// plane sets it, at creation, and it never changes.
 	//
 	// +k8s:required
 	// +k8s:minimum=1
 	// +k8s:maximum=2 # keep this in sync with the ForkRole enum
-	// +k8s:immutable
 	Role ForkRole `protobuf:"varint,1,opt,name=role,proto3,enum=substrate.ateapi.v1.ForkRole" json:"role,omitempty"`
 	// start_time is when the forked actor became RUNNING. The reaper measures
 	// max_lifetime_seconds from it.
@@ -3255,7 +3255,6 @@ type ActorFork struct {
 	//
 	// +k8s:optional
 	// +k8s:beta(since: "0.0")=+k8s:subfield(atespace)=+k8s:forbidden # TODO: get rid of beta prefix
-	// +k8s:immutable
 	PinnedWorker  *ObjectRef `protobuf:"bytes,5,opt,name=pinned_worker,json=pinnedWorker,proto3" json:"pinned_worker,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
