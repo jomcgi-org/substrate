@@ -153,11 +153,16 @@ func buildDeploymentApplyConfig(wp *atev1.WorkerPool, otel workerOTelSettings, s
 		"--dns-egress-policy="+dnsEgressPolicy,
 	)
 
-	// worker gets preview features when the controller has them.
+	// worker gets preview features when the controller has them. ForkSeed is
+	// the exception: only a worker of a KVM pool takes it, because a worker
+	// image built before the gate existed exits on an unknown gate name, and
+	// every other pool still runs one. A KVM pool is the one with /dev/kvm
+	// and --fork-platform=kvm, so the gate, the device and the flag always
+	// come together.
 	enabledGates := func() []string {
 		ret := []string{}
 		for k, v := range preview.AsMap() {
-			if v {
+			if v && (wp.Spec.KVMPlatform() || k != string(preview.GateForkSeed)) {
 				ret = append(ret, k)
 			}
 		}

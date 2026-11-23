@@ -1178,6 +1178,78 @@ func TestBuildDeploymentPreview(t *testing.T) {
 	}
 }
 
+// A worker image from before ForkSeed existed exits on the unknown gate name,
+// so only a KVM pool's worker is given ForkSeed. Every other pool gets the
+// --preview value it would get with the gate off, whatever the other gates.
+func TestBuildDeploymentPreviewForkSeed(t *testing.T) {
+	gates := []preview.Gate{"Fake", preview.GateForkSeed, "Phony"}
+	kvm := atev1.SandboxPlatformKVM
+	systrap := atev1.SandboxPlatformSystrap
+	previewArgs := func(t *testing.T, classes []atev1.WorkerPoolSandboxClass, enabled ...string) []string {
+		t.Helper()
+		preview.InitForTestFake(t, gates, enabled...)
+		wp := testWorkerPoolApplyConfig(nil)
+		wp.Spec.SandboxClasses = classes
+		c := buildDeploymentApplyConfig(wp, workerOTelSettings{}, installdefaults.SystemNamespace, installdefaults.AteletServiceAccount, installdefaults.RouterServiceAccount, egresspolicy.DNSEgressPolicyEnforceInAtunnel).
+			Spec.Template.Spec.Containers[0]
+		var got []string
+		for _, arg := range c.Args {
+			if strings.HasPrefix(arg, "--preview") {
+				got = append(got, arg)
+			}
+		}
+		return got
+	}
+	for _, tc := range []struct {
+		name    string
+		classes []atev1.WorkerPoolSandboxClass
+		enabled []string
+		want    []string
+	}{
+		{"gvisor pool, ForkSeed on", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor}}, []string{"ForkSeed", "Fake"}, []string{"--preview=Fake"}},
+		{"gvisor systrap pool, ForkSeed on", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &systrap}}, []string{"ForkSeed", "Fake"}, []string{"--preview=Fake"}},
+		{"microvm pool, ForkSeed on", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassMicroVM}}, []string{"ForkSeed", "Fake"}, []string{"--preview=Fake"}},
+		{"microvm pool, ALL", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassMicroVM}}, []string{"ALL"}, []string{"--preview=Fake,Phony"}},
+		{"gvisor pool, only ForkSeed on", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor}}, []string{"ForkSeed"}, []string{"--preview="}},
+		{"no class, ForkSeed on", nil, []string{"ForkSeed", "Fake"}, []string{"--preview=Fake"}},
+		{"kvm pool, ForkSeed on", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &kvm}}, []string{"ForkSeed", "Fake"}, []string{"--preview=Fake,ForkSeed"}},
+		{"kvm pool, ALL", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &kvm}}, []string{"ALL"}, []string{"--preview=Fake,ForkSeed,Phony"}},
+		// The CRD allows one class, so this does not occur. The gate follows
+		// KVMPlatform, which reads the first class, as /dev/kvm and
+		// --fork-platform do: a worker given ForkSeed always has both.
+		{"systrap class first, kvm class second", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &systrap}, {Name: atev1.SandboxClassMicroVM, Platform: &kvm}}, []string{"ForkSeed"}, []string{"--preview="}},
+		{"kvm class first, systrap class second", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &kvm}, {Name: atev1.SandboxClassMicroVM, Platform: &systrap}}, []string{"ForkSeed"}, []string{"--preview=ForkSeed"}},
+		// Gate off: nothing changes for any pool.
+		{"kvm pool, gate off", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &kvm}}, []string{"Fake"}, []string{"--preview=Fake"}},
+		{"gvisor pool, gate off", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor}}, []string{"Fake"}, []string{"--preview=Fake"}},
+		{"kvm pool, no gates", []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor, Platform: &kvm}}, nil, []string{"--preview="}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, previewArgs(t, tc.classes, tc.enabled...)); diff != "" {
+				t.Errorf("--preview args mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+	// Whole args: with ForkSeed on, a non-KVM pool's args are byte-identical
+	// to the args with it off.
+	t.Run("non-KVM args equal gate-off args", func(t *testing.T) {
+		build := func(enabled ...string) []string {
+			preview.InitForTestFake(t, gates, enabled...)
+			wp := testWorkerPoolApplyConfig(nil)
+			wp.Spec.SandboxClasses = []atev1.WorkerPoolSandboxClass{{Name: atev1.SandboxClassGvisor}}
+			return buildDeploymentApplyConfig(wp, workerOTelSettings{}, installdefaults.SystemNamespace, installdefaults.AteletServiceAccount, installdefaults.RouterServiceAccount, egresspolicy.DNSEgressPolicyEnforceInAtunnel).
+				Spec.Template.Spec.Containers[0].Args
+		}
+		off := build("Fake", "Phony")
+		for _, on := range [][]string{{"ForkSeed", "Fake", "Phony"}, {"ALL"}} {
+			if diff := cmp.Diff(off, build(on...)); diff != "" {
+				t.Errorf("args with %v differ from gate-off args (-off +on):\n%s", on, diff)
+			}
+		}
+	})
+}
+
 // A gVisor pool on the KVM platform gets /dev/kvm from the device plugin, the
 // capabilities forkd asserts and --fork-platform. A pool without a platform,
 // on systrap, or of another class gets none of them.
