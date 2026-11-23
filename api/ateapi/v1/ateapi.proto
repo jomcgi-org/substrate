@@ -1352,6 +1352,15 @@ message ActorFork {
   //
   // +k8s:optional
   google.protobuf.Timestamp exit_time = 4;
+
+  // pinned_worker is the Worker that holds a seed. The control plane places
+  // the seed there and nowhere else. Unset for a forked actor. The atespace is
+  // empty, since Workers are global-scoped.
+  //
+  // +k8s:optional
+  // +k8s:beta(since: "0.0")=+k8s:subfield(atespace)=+k8s:forbidden # TODO: get rid of beta prefix
+  // +k8s:immutable
+  ObjectRef pinned_worker = 5;
 }
 
 // ResourceRequirements are the compute resources a workload may use.

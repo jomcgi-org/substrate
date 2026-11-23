@@ -169,6 +169,12 @@ message WorkerSandboxRuntime {
   //
   // +k8s:optional
   RuntimeOverhead actor_overhead = 2;
+
+  // The resource overhead incurred by the worker for each forked actor under
+  // this runtime. Set only by a worker that can hold seeds and fork from them.
+  //
+  // +k8s:optional
+  RuntimeOverhead fork_overhead = 3;
 }
 
 // RuntimeOverhead is the memory an actor uses on its worker outside its own
