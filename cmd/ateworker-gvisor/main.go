@@ -268,6 +268,24 @@ func do(ctx context.Context) error {
 		return err
 	}
 	ateworkerService := NewService(tunnel, actorLogger, *maxActors, flags, bootID)
+	if *forkPlatform != "" {
+		if *forkPlatform != "kvm" {
+			return fmt.Errorf("--fork-platform must be kvm or empty, got %q", *forkPlatform)
+		}
+		ateworkerService.fork = newForkManager(execForkdLauncher{
+			stateDir:     filepath.Join(ateworkerDir, "forkd"),
+			cgroupParent: filepath.Join(defaultCgroupRoot, forkdCgroupName),
+			uid:          os.Getuid(),
+		}, serviceForkHost{ateworkerService})
+		ateworkerService.fork.lockActor = func(ctx context.Context, uid string) (func(), bool) {
+			if !ateworkerService.locks.Lock(ctx, uid) {
+				return nil, false
+			}
+			return func() { ateworkerService.locks.Unlock(uid) }, true
+		}
+		ateworkerService.fork.tailLogs = ateworkerService.tailActorLogs
+		ateworkerService.fork.shuttingDown = ateworkerService.shuttingDown.Load
+	}
 	ateworkerService.throttleMemory = cgroup.PSIEnabled(defaultCgroupRoot)
 	if !ateworkerService.throttleMemory {
 		slog.WarnContext(ctx, "Kernel has no cgroup memory pressure (PSI), so sandboxes keep memory.max and an OOM kill in one can restart the worker")
@@ -327,10 +345,16 @@ func do(ctx context.Context) error {
 		SandboxClass:         string(atev1.SandboxClassGvisor),
 		RuntimesFile:         nodepath.WorkerSandboxRuntimesPath(*podUID),
 	}
+	if ateworkerService.fork != nil {
+		reportConfig.ForkOverhead = forkOverhead
+	}
 	if reporter, err := register.NewCrashReporter(reportConfig); err != nil {
 		slog.ErrorContext(ctx, "Crashed actors will not be reported", slog.Any("err", err))
 	} else {
 		ateworkerService.crashReporter = reporter
+		if ateworkerService.fork != nil {
+			ateworkerService.fork.reporter = reporter
+		}
 	}
 	go func() {
 		err := register.Report(ctx, reportConfig, &ateworkerService.epoch)
@@ -423,6 +447,10 @@ type AteWorkerService struct {
 
 	// enableCoreTags indicates whether the host kernel supports core tagging.
 	enableCoreTags bool
+
+	// fork holds the seeds and forked actors of this process. Nil unless
+	// --fork-platform=kvm.
+	fork *forkManager
 }
 
 var _ ateworkerpb.WorkerServer = (*AteWorkerService)(nil)
@@ -1354,6 +1382,15 @@ func (s *AteWorkerService) TerminateWorkload(ctx context.Context, req *ateworker
 	defer s.locks.Unlock(req.GetActorUid())
 
 	attribution := workerstats.ActorAttributionFromRequest(req)
+
+	// A seed or a forked actor lives in forkd, not in runsc containers.
+	if s.fork != nil && s.fork.owns(attribution.UID) {
+		if err := s.fork.terminate(ctx, attribution.UID); err != nil {
+			return nil, fmt.Errorf("failed to terminate workload: %w", err)
+		}
+		s.actorLogger.EmitLifecycleLog(ctx, "Actor terminated", attribution)
+		return &ateworkerpb.TerminateWorkloadResponse{}, nil
+	}
 
 	hosted := s.lookupActor(attribution.UID)
 	if hosted != nil {
