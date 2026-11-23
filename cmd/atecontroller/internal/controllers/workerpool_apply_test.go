@@ -1199,7 +1199,7 @@ func TestKVMPlatformPodShape(t *testing.T) {
 			wp := testWorkerPoolApplyConfig(&atev1.WorkerPoolPodTemplate{
 				Resources: &corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")}},
 			})
-			wp.Spec.SandboxClasses = []atev1.WorkerPoolSandboxClass{{Name: tt.class, Platform: tt.platform}}
+			wp.Spec.SandboxClasses = []atev1.WorkerPoolSandboxClass{{Name: tt.class, Platform: platformPtr(tt.platform)}}
 			c := buildDeploymentApplyConfig(wp, workerOTelSettings{}, installdefaults.SystemNamespace, installdefaults.AteletServiceAccount, installdefaults.RouterServiceAccount, egresspolicy.DNSEgressPolicyEnforceInAtunnel).Spec.Template.Spec.Containers[0]
 
 			hasArg := slices.Contains(c.Args, "--fork-platform=kvm")
@@ -1239,4 +1239,11 @@ func TestWorkerSecurityContextKVMPlatform(t *testing.T) {
 	if len(workerGvisorCapabilities) != len(plain) {
 		t.Error("building a KVM security context changed the shared gVisor capability list")
 	}
+}
+
+func platformPtr(p atev1.SandboxPlatform) *atev1.SandboxPlatform {
+	if p == "" {
+		return nil
+	}
+	return &p
 }

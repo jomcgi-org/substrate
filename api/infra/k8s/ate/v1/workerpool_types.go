@@ -17,6 +17,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 // WorkerPoolLabelValue is a Kubernetes label value for generated worker
@@ -134,7 +135,7 @@ type WorkerPoolSandboxClass struct {
 	//
 	// +optional
 	// +kubebuilder:validation:Enum=systrap;kvm
-	Platform SandboxPlatform `json:"platform,omitempty"`
+	Platform *SandboxPlatform `json:"platform,omitempty"`
 
 	// configRef names a cluster-scoped SandboxConfig for this sandbox class.
 	// The referenced config's SandboxClass must match Name. When omitted, the
@@ -169,7 +170,7 @@ func (s *WorkerPoolSpec) DefaultSandboxClass() SandboxClass {
 // KVMPlatform reports whether the pool's sandbox class is a gVisor class on
 // the KVM platform, which holds seeds and forks actors from them.
 func (s *WorkerPoolSpec) KVMPlatform() bool {
-	return len(s.SandboxClasses) > 0 && s.SandboxClasses[0].Name == SandboxClassGvisor && s.SandboxClasses[0].Platform == SandboxPlatformKVM
+	return len(s.SandboxClasses) > 0 && s.SandboxClasses[0].Name == SandboxClassGvisor && ptr.Deref(s.SandboxClasses[0].Platform, "") == SandboxPlatformKVM
 }
 
 // ResolvedSandboxConfig returns the name of the SandboxConfig the controller
