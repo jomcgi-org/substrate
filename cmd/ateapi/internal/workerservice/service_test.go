@@ -47,6 +47,8 @@ type fakeControl struct {
 	reportErr  error
 	crashCalls []crashCall
 	crashResp  *ateapi.Actor
+	exitCalls  []exitCall
+	exitResp   *ateapi.Actor
 }
 
 func (f *fakeControl) SuspendActor(_ context.Context, req *ateapi.SuspendActorRequest) (*ateapi.SuspendActorResponse, error) {
@@ -76,6 +78,18 @@ type crashCall struct {
 func (f *fakeControl) CrashActorReportedByWorker(_ context.Context, actorRef resources.ActorRef, actorUID, workerName, message string) (*ateapi.Actor, error) {
 	f.crashCalls = append(f.crashCalls, crashCall{actorRef, actorUID, workerName, message})
 	return f.crashResp, f.err
+}
+
+// exitCall is one ExitActorReportedByWorker call.
+type exitCall struct {
+	ActorRef             resources.ActorRef
+	ActorUID, WorkerName string
+	ExitCode             int32
+}
+
+func (f *fakeControl) ExitActorReportedByWorker(_ context.Context, actorRef resources.ActorRef, actorUID, workerName string, exitCode int32) (*ateapi.Actor, error) {
+	f.exitCalls = append(f.exitCalls, exitCall{actorRef, actorUID, workerName, exitCode})
+	return f.exitResp, f.err
 }
 
 // testEpoch is the epoch seedReportedWorker records as acquired and active.

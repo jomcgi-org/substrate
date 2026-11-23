@@ -370,6 +370,14 @@ func main() {
 	templateReconciler := controlapi.NewActorTemplateReconciler(persistence, controlSrv, *templateResyncInterval)
 	templateReconciler.Start(shutdownCtx)
 
+	// Keep a seed sandbox per fork template on each eligible Worker, and delete
+	// the forked actors that did not delete themselves. Without the ForkSeed
+	// gate no template has fork_config, so there is nothing to run.
+	if preview.IsEnabled(preview.GateForkSeed) {
+		controlapi.NewSeedReconciler(persistence, controlSrv, *templateResyncInterval).Start(shutdownCtx)
+		controlapi.NewForkReaper(persistence, controlSrv, *templateResyncInterval).Start(shutdownCtx)
+	}
+
 	// Crash the Actors lost when a Worker's worker restarts.
 	workerAssignmentReconciler := controlapi.NewWorkerAssignmentReconciler(persistence, workerCache)
 	workerAssignmentReconciler.Start(shutdownCtx)

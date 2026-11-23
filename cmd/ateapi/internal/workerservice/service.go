@@ -57,6 +57,7 @@ type actorControl interface {
 	SuspendActor(ctx context.Context, req *ateapi.SuspendActorRequest) (*ateapi.SuspendActorResponse, error)
 	ApplyActorSnapshotState(ctx context.Context, actorRef resources.ActorRef, actorUID, node string, state *ateapi.ActorSnapshotState) error
 	CrashActorReportedByWorker(ctx context.Context, actorRef resources.ActorRef, actorUID, workerName, message string) (*ateapi.Actor, error)
+	ExitActorReportedByWorker(ctx context.Context, actorRef resources.ActorRef, actorUID, workerName string, exitCode int32) (*ateapi.Actor, error)
 }
 
 var _ ateapi.WorkerServiceServer = (*Server)(nil)
