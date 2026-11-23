@@ -74,6 +74,18 @@ func TestDefaultRPCPermissions(t *testing.T) {
 			want: []check{{RelationCanCreateActorTemplate, "atespace:team-a"}},
 		},
 		{
+			name:       "CreateActorTemplate with fork_config also checks the installation",
+			fullMethod: ateapi.Control_CreateActorTemplate_FullMethodName,
+			req: &ateapi.CreateActorTemplateRequest{ActorTemplate: &ateapi.ActorTemplate{
+				Metadata:   &ateapi.ResourceMetadata{Atespace: "team-a", Name: "tmpl"},
+				ForkConfig: &ateapi.ForkConfig{},
+			}},
+			want: []check{
+				{RelationCanCreateActorTemplate, "atespace:team-a"},
+				{RelationCanCreateForkTemplate, GlobalRootObject},
+			},
+		},
+		{
 			name:       "GetActorTemplate",
 			fullMethod: ateapi.Control_GetActorTemplate_FullMethodName,
 			req:        &ateapi.GetActorTemplateRequest{ActorTemplate: localTemplate},

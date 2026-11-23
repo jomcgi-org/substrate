@@ -55,6 +55,7 @@ const (
 	RelationCanCreateActor          = "can_create_actor"
 	RelationCanListActors           = "can_list_actors"
 	RelationCanCreateActorTemplate  = "can_create_actor_template"
+	RelationCanCreateForkTemplate   = "can_create_fork_template"
 	RelationCanListActorTemplates   = "can_list_actor_templates"
 	RelationCanCreateWorker         = "can_create_worker"
 	RelationCanListWorkers          = "can_list_workers"

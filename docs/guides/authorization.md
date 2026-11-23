@@ -177,7 +177,7 @@ viewer, and a global role holds the same role in every atespace. So
 
 | RPC | Permission, on | Allowed for |
 |---|---|---|
-| `CreateActorTemplate` | `can_create_actor_template`, `metadata.atespace` | Atespace editor |
+| `CreateActorTemplate` | 1. `can_create_actor_template`, `metadata.atespace`<br>2. `can_create_fork_template`, global, if the template sets `forkConfig` | 1. Atespace editor<br>2. Global owner |
 | `GetActorTemplate` | `can_get`, the template | Viewer of its atespace |
 | `DeleteActorTemplate` | `can_delete`, the template | Editor of its atespace |
 | `ListActorTemplates` | `can_list_actor_templates`, the atespace, or global if none is given | Atespace viewer; global viewer for all atespaces |
@@ -227,6 +227,7 @@ certificate.
 | `RegisterWorker` | `atelet` on the worker's node |
 | `SetWorkerSandboxRuntimes` | `atelet` on the worker's node |
 | `ReportActorCrashed` | `atelet` on the node of the worker hosting the actor |
+| `ReportActorExited` | `atelet` on the node of the worker hosting the actor |
 | `RequestActorSuspend` | `atelet` on the node of the worker hosting the actor |
 | `MintWorkerActorJwt` | `atelet` on the node hosting the actor |
 | `MintWorkerActorCertificate` | `atelet` on the node of the worker the actor is assigned to |

@@ -216,6 +216,7 @@ func TestUnaryServerInterceptor_UnregisteredAndHandlerAuthorizedRPCs(t *testing.
 		{"unregistered RPC is denied without a principal", context.Background(), unregistered, codes.PermissionDenied},
 		{"RegisterWorker passes", context.Background(), ateapi.WorkerService_RegisterWorker_FullMethodName, codes.OK},
 		{"RequestActorSuspend passes", context.Background(), ateapi.WorkerService_RequestActorSuspend_FullMethodName, codes.OK},
+		{"ReportActorExited passes", context.Background(), ateapi.WorkerService_ReportActorExited_FullMethodName, codes.OK},
 		{"MintWorkerActorCertificate passes", context.Background(), ateapi.WorkerService_MintWorkerActorCertificate_FullMethodName, codes.OK},
 		{"MintWorkerActorJwt passes", context.Background(), ateapi.WorkerService_MintWorkerActorJwt_FullMethodName, codes.OK},
 	}

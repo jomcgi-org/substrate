@@ -201,8 +201,15 @@ var defaultRPCPermissions = map[string]rpcRule{
 	})),
 
 	// Actor templates.
+	// A template with fork_config also needs can_create_fork_template on the
+	// installation: its code runs in a seed sandbox that has no seccomp filter.
 	ateapi.Control_CreateActorTemplate_FullMethodName: rule(checksOf(func(r *ateapi.CreateActorTemplateRequest) ([]check, field.ErrorList) {
-		return onAtespace(RelationCanCreateActorTemplate, r.GetActorTemplate().GetMetadata().GetAtespace(), field.NewPath("actor_template", "metadata", "atespace"))
+		checks, errs := onAtespace(RelationCanCreateActorTemplate, r.GetActorTemplate().GetMetadata().GetAtespace(), field.NewPath("actor_template", "metadata", "atespace"))
+		if r.GetActorTemplate().GetForkConfig() == nil {
+			return checks, errs
+		}
+		forkChecks, forkErrs := onGlobal(RelationCanCreateForkTemplate)
+		return both(checks, errs, forkChecks, forkErrs)
 	})),
 	ateapi.Control_GetActorTemplate_FullMethodName: rule(checksOf(func(r *ateapi.GetActorTemplateRequest) ([]check, field.ErrorList) {
 		return onActorTemplate(RelationCanGet, r.GetActorTemplate(), field.NewPath("actor_template"))
@@ -327,6 +334,7 @@ var defaultRPCPermissions = map[string]rpcRule{
 	ateapi.WorkerService_RegisterWorker_FullMethodName:             inHandler("ateletauth: caller is atelet on the Worker's node"),
 	ateapi.WorkerService_SetWorkerSandboxRuntimes_FullMethodName:   inHandler("ateletauth: caller is atelet on the Worker's node"),
 	ateapi.WorkerService_ReportActorCrashed_FullMethodName:         inHandler("ateletauth: caller is atelet on the node of the Worker hosting the Actor"),
+	ateapi.WorkerService_ReportActorExited_FullMethodName:          inHandler("ateletauth: caller is atelet on the node of the Worker hosting the Actor"),
 	ateapi.WorkerService_RequestActorSuspend_FullMethodName:        inHandler("ateletauth: caller is atelet on the node of the Worker hosting the Actor"),
 	ateapi.WorkerService_MintWorkerActorCertificate_FullMethodName: inHandler("ateletauth: caller is atelet on the node of the Worker the Actor is assigned to"),
 	ateapi.WorkerService_MintWorkerActorJwt_FullMethodName:         inHandler("ateletauth: caller is atelet on the node hosting the Actor"),

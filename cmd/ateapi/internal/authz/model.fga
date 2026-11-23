@@ -55,6 +55,11 @@ type global
 
     define can_create_atespace: owner
     define can_list_atespaces: viewer
+
+    # Creating an ActorTemplate with fork_config. Its template code runs in an
+    # unfiltered seed sandbox for as long as the seed lives, so the global owner
+    # holds this, not an atespace editor.
+    define can_create_fork_template: owner
     define can_create_worker: owner or controller
     define can_list_workers: viewer or controller
 

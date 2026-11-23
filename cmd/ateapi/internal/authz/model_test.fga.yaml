@@ -105,6 +105,7 @@ tests:
           viewer: true
           can_create_atespace: true
           can_create_worker: true
+          can_create_fork_template: true
           can_list_workers: true
           can_list_actors: true
           can_list_actor_templates: true
@@ -137,6 +138,7 @@ tests:
           viewer: true
           can_create_atespace: false
           can_create_worker: false
+          can_create_fork_template: false
           can_list_workers: true
           can_list_actors: true
           can_list_actor_templates: true
@@ -572,3 +574,26 @@ tests:
         object: actor:runner-1
         assertions:
           can_mint_actor_jwt: false
+
+  - name: 10. Fork Templates (Global Owner Only)
+    check:
+      - user: user:carol # Global owner
+        object: global:root
+        assertions:
+          can_create_fork_template: true
+      - user: user:frank # Global viewer
+        object: global:root
+        assertions:
+          can_create_fork_template: false
+      - user: user:alice # Atespace owner
+        object: global:root
+        assertions:
+          can_create_fork_template: false
+      - user: user:bob # Atespace editor
+        object: global:root
+        assertions:
+          can_create_fork_template: false
+      - user: user:sys-controller
+        object: global:root
+        assertions:
+          can_create_fork_template: false
