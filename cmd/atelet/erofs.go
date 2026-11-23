@@ -41,7 +41,7 @@ import (
 const (
 	// erofsRecipe names how the image is built. A change to the build makes a
 	// new cache key, since the key must name immutable content.
-	erofsRecipe = "erofs-v1"
+	erofsRecipe = "erofs-v2"
 
 	rootfsImageName = "rootfs.erofs"
 	rootfsHashName  = "rootfs.erofs.sha256"
@@ -58,14 +58,16 @@ type erofsBuilder interface {
 
 // mkfsErofs builds the image with mkfs.erofs, which reads the merged
 // filesystem as a tar stream. Timestamps and the UUID are fixed so the image
-// is reproducible.
+// is reproducible. The sentry cannot map a regular file whose tail is packed
+// inline, so inline data is off: without it a sandbox fails to load its
+// executables with EFAULT.
 type mkfsErofs struct {
 	binary string
 }
 
 func (m mkfsErofs) Build(ctx context.Context, img *imagecache.Image, out string) error {
 	pr, pw := io.Pipe()
-	cmd := exec.CommandContext(ctx, m.binary, "--tar=f", "-T", "0", "-U", erofsUUID, "--quiet", out)
+	cmd := exec.CommandContext(ctx, m.binary, "--tar=f", "-E", "noinline_data", "-T", "0", "-U", erofsUUID, "--quiet", out)
 	cmd.Stdin = pr
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
