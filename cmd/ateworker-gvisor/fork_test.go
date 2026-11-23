@@ -48,12 +48,14 @@ const (
 type fakeLauncher struct {
 	socket   string
 	launches int
+	bins     []forkdBinaries // what each launch was given
 	err      error
 	exited   chan struct{}
 }
 
-func (l *fakeLauncher) Launch(context.Context, string) (*forkd.Client, <-chan struct{}, error) {
+func (l *fakeLauncher) Launch(_ context.Context, bins forkdBinaries) (*forkd.Client, <-chan struct{}, error) {
 	l.launches++
+	l.bins = append(l.bins, bins)
 	if l.err != nil {
 		return nil, nil, l.err
 	}

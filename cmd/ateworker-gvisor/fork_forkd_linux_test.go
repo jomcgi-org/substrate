@@ -187,8 +187,8 @@ type testLauncher struct {
 	pid      int
 }
 
-func (l *testLauncher) Launch(ctx context.Context, binary string) (*forkd.Client, <-chan struct{}, error) {
-	c, exited, err := l.execForkdLauncher.Launch(ctx, binary)
+func (l *testLauncher) Launch(ctx context.Context, bins forkdBinaries) (*forkd.Client, <-chan struct{}, error) {
+	c, exited, err := l.execForkdLauncher.Launch(ctx, bins)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -277,6 +277,7 @@ func do(ctx context.Context) error {
 			cgroupParent: filepath.Join(defaultCgroupRoot, forkdCgroupName),
 			uid:          os.Getuid(),
 		}, serviceForkHost{ateworkerService})
+		ateworkerService.fork.binRoot = forkdBinRoot
 		ateworkerService.fork.lockActor = func(ctx context.Context, uid string) (func(), bool) {
 			if !ateworkerService.locks.Lock(ctx, uid) {
 				return nil, false

@@ -75,7 +75,7 @@ const defaultForkdWaitRetry = time.Second
 
 // forkdLauncher starts forkd and reports when it exits.
 type forkdLauncher interface {
-	Launch(ctx context.Context, binary string) (*forkd.Client, <-chan struct{}, error)
+	Launch(ctx context.Context, bins forkdBinaries) (*forkd.Client, <-chan struct{}, error)
 }
 
 // forkHost is what a forked actor needs from the worker around forkd: its
@@ -134,9 +134,15 @@ type forkManager struct {
 	// waitRetry is the pause before a child's watcher retries a failed wait.
 	waitRetry time.Duration
 
+	// binRoot is where forkd's binaries are staged (see forkdBinRoot). Empty
+	// runs forkd from the assets of the seed that starts it, which tests with
+	// a fake launcher do.
+	binRoot string
+
 	mu       sync.Mutex
 	client   *forkd.Client
-	atespace string // the atespace this process serves, once it has a seed
+	bins     *stagedForkdBins // what forkd runs, once staged
+	atespace string           // the atespace this process serves, once it has a seed
 	seeds    map[string]*forkSeed
 	children map[string]*forkChild
 }
@@ -172,14 +178,37 @@ func forkdPath(runscPath string) string {
 	return filepath.Join(filepath.Dir(runscPath), forkdBinaryRel)
 }
 
+// forkdBinaries returns the binaries forkd runs, staging them from the seed's
+// runsc the first time. Later seeds have to name the same release. The caller
+// holds m.mu.
+func (m *forkManager) forkdBinaries(runscPath string) (forkdBinaries, error) {
+	if m.binRoot == "" {
+		return forkdBinaries{Forkd: forkdPath(runscPath)}, nil
+	}
+	if m.bins != nil {
+		return m.bins.binaries(), m.bins.matches(runscPath)
+	}
+	staged, err := stageForkdBins(m.binRoot, runscPath)
+	if err != nil {
+		return forkdBinaries{}, err
+	}
+	m.bins = staged
+	return staged.binaries(), nil
+}
+
 // ensureForkd starts forkd if this process has not, and checks what it says it
 // is. The caller holds m.mu.
-func (m *forkManager) ensureForkd(ctx context.Context, binary string) (*forkd.Client, error) {
+func (m *forkManager) ensureForkd(ctx context.Context, runscPath string) (*forkd.Client, error) {
+	bins, err := m.forkdBinaries(runscPath)
+	if err != nil {
+		return nil, err
+	}
 	if m.client != nil {
 		return m.client, nil
 	}
-	client, exited, err := m.launcher.Launch(ctx, binary)
+	client, exited, err := m.launcher.Launch(ctx, bins)
 	if err != nil {
+		m.bins = nil // stage again: the directory may be what failed
 		return nil, apierror.FailedPrecondition("starting forkd: %v", err)
 	}
 	helloCtx, cancel := context.WithTimeout(ctx, forkdHelloTimeout)
@@ -274,7 +303,7 @@ func (m *forkManager) seed(ctx context.Context, req *ateworkerpb.SeedWorkloadReq
 		m.mu.Unlock()
 		return nil // a retried Seed that already landed
 	}
-	client, err := m.ensureForkd(ctx, forkdPath(req.GetRunscPath()))
+	client, err := m.ensureForkd(ctx, req.GetRunscPath())
 	m.mu.Unlock()
 	if err != nil {
 		return err
@@ -675,7 +704,8 @@ func (l execForkdLauncher) args() []string {
 	}
 }
 
-func (l execForkdLauncher) Launch(ctx context.Context, binary string) (*forkd.Client, <-chan struct{}, error) {
+func (l execForkdLauncher) Launch(ctx context.Context, bins forkdBinaries) (*forkd.Client, <-chan struct{}, error) {
+	binary := bins.Forkd
 	if _, err := os.Stat(binary); err != nil {
 		return nil, nil, fmt.Errorf("the SandboxConfig has no forkd: %w", err)
 	}
@@ -690,7 +720,7 @@ func (l execForkdLauncher) Launch(ctx context.Context, binary string) (*forkd.Cl
 			slog.WarnContext(ctx, "could not delegate a cgroup controller to forkd", slog.String("controller", c), slog.Any("err", err))
 		}
 	}
-	cmd := exec.Command(binary, l.args()...)
+	cmd := exec.Command(binary, append(l.args(), bins.args()...)...)
 	cmd.Env = []string{}
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}

@@ -62,8 +62,13 @@ slice.
   (the release jobs do). `--mkfs-erofs` overrides the path. The images are built
   without inline data, which the sentry cannot map.
 - ateworker-gvisor: `SeedWorkload`, `ForkWorkload`, `DropSeed`, with
-  `--fork-platform=kvm`. It starts `forkd` from `gvisor-bin/forkd` of the
-  SandboxConfig tarball and speaks version 2 of the forkd protocol of the gVisor
+  `--fork-platform=kvm`. It links `runsc` and `gvisor-bin/*` of the
+  SandboxConfig tarball into `/var/lib/ate/forkd-bin/release-<hash>` (0755, a
+  copy when a link is not safe or fails), starts `forkd` from there with
+  `--forkd-runsc`, `--forkd-sidecar-dir` and the hashes of runsc and the sentry,
+  and refuses a seed of another release. The sandbox runs as nobody, so it needs
+  a path it can traverse; atelet's actor directories are 0700, and one forkd
+  outlives the first seed actor's assets. It speaks version 2 of the forkd protocol of the gVisor
   fork (`internal/forkd`). forkd runs the seed in its own cgroup with
   `memory.max` set to `seed_resources`, which the guest sees as its memory.
   A forked actor gets `memory.max` of its limit plus `fork_overhead`. Only
