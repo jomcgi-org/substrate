@@ -68,6 +68,11 @@ service WorkerSupport {
   // hosts died on its own, for atelet to forward to the control plane's
   // WorkerService, which this mirrors.
   rpc ReportActorCrashed(ReportActorCrashedRequest) returns (ReportActorCrashedResponse) {}
+
+  // ReportActorExited reports that the workload of the forked actor this
+  // worker hosts has exited, for atelet to forward to the control plane's
+  // WorkerService, which this mirrors. The control plane deletes the actor.
+  rpc ReportActorExited(ReportActorExitedRequest) returns (ReportActorExitedResponse) {}
 }
 
 message AcquireWorkerEpochRequest {
@@ -349,6 +354,34 @@ message ReportActorCrashedRequest {
 message ReportActorCrashedResponse {
 }
 
+message ReportActorExitedRequest {
+  // The forked actor the calling worker is hosting, as for
+  // RequestActorSuspend.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_atespace = 1;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_name = 2;
+
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string actor_uid = 3;
+
+  // The exit status of the workload; 128 plus the signal number when a signal
+  // killed it.
+  //
+  // +k8s:optional
+  // +k8s:minimum=0
+  // +k8s:maximum=255
+  int32 exit_code = 4;
+}
+
+message ReportActorExitedResponse {
+}
+
 message GetActorEgressPolicyRequest {
   // The actor the calling worker is hosting. atelet reads its policy from the
   // control plane by name.
@@ -507,6 +540,212 @@ service Atelet {
   // Terminate tells atelet to terminate/kill any running workload for an actor,
   // unmount its volumes, and clean up actor state on the node.
   rpc Terminate(TerminateRequest) returns (TerminateResponse) {}
+
+  // Seed builds the seed sandbox of an ActorTemplate on a worker. atelet
+  // builds the template image's read-only root filesystem image, checks its
+  // content hash, and has the worker boot the seed from it. The seed holds no
+  // network identity and serves only Fork.
+  rpc Seed(SeedRequest) returns (SeedResponse) {}
+
+  // Fork starts a forked actor from the seed on the worker. atelet checks that
+  // the seed belongs to the request's atespace and template before it calls the
+  // worker. Only ate-api-server calls it.
+  rpc Fork(ForkRequest) returns (ForkResponse) {}
+
+  // DropSeed discards the seed sandbox of a seed actor and its on-node state.
+  // Idempotent: a seed that is already gone is not an error.
+  rpc DropSeed(DropSeedRequest) returns (DropSeedResponse) {}
+}
+
+message SeedRequest {
+  // The UID of the worker pod that holds the seed.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string worker_pod_uid = 1;
+
+  // The seed actor. It lives in the atespace of its template.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string atespace = 2;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_name = 3;
+
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string actor_uid = 4;
+
+  // The template the seed is built from, which must be in atespace.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_template_atespace = 5;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_template_name = 6;
+
+  // The UID of the template. It names the seed's generation, since a template
+  // does not change.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string template_uid = 7;
+
+  // The workload the seed boots: one container and no volumes.
+  //
+  // +k8s:required
+  WorkloadSpec spec = 8;
+
+  // What the seed holds on the worker, from the template's
+  // `fork_config.seed_resources`.
+  //
+  // +k8s:required
+  ResourceRequirements resources = 9;
+
+  // The runtime the assigned worker runs the seed under.
+  //
+  // +k8s:required
+  ActorSandboxRuntime sandbox_runtime = 10;
+}
+
+message SeedResponse {
+  // The epoch of the worker process that holds the seed.
+  int64 worker_epoch = 1;
+
+  // The SHA-256 of the root filesystem image the seed booted from, as lowercase
+  // hex.
+  string rootfs_sha256 = 2;
+}
+
+// ForkRequest has no egress gateway: a forked actor has no egress.
+message ForkRequest {
+  // The UID of the worker pod that holds the seed.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string worker_pod_uid = 1;
+
+  // The forked actor. It lives in the atespace of its template.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string atespace = 2;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_name = 3;
+
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string actor_uid = 4;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_template_atespace = 5;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_template_name = 6;
+
+  // The UID of the template the seed was built from.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string template_uid = 7;
+
+  // The seed to fork from, as recorded on the Worker.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string seed_actor_uid = 8;
+
+  // The epoch the control plane recorded for the seed. A worker process with
+  // another epoch no longer holds the seed.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  int64 seed_worker_epoch = 9;
+
+  // The workload of the forked actor, for its wakeup probe: one container and
+  // no volumes.
+  //
+  // +k8s:required
+  WorkloadSpec spec = 10;
+
+  // The private limits of the forked actor, from the template's
+  // `resources.limits`.
+  //
+  // +k8s:required
+  ResourceRequirements resources = 11;
+
+  // Environment the control plane generates for the forked actor. Nothing
+  // derived from a request may be in it: the sandbox parses it before its
+  // seccomp filter is on.
+  //
+  // +k8s:optional
+  // +k8s:maxItems=8
+  // +k8s:listType=map
+  // +k8s:listMapKey=name
+  repeated EnvVar env = 12;
+
+  // The runtime the assigned worker runs the actor under.
+  //
+  // +k8s:required
+  ActorSandboxRuntime sandbox_runtime = 13;
+
+  // The most processes and threads the actor may run.
+  //
+  // +k8s:required
+  // +k8s:minimum=32
+  // +k8s:maximum=4096 # matches ateapi.ForkConfig.pids_limit
+  int32 pids_limit = 14;
+
+  // The most stdout and stderr bytes the actor may write.
+  //
+  // +k8s:required
+  // +k8s:minimum=1024
+  // +k8s:maximum=1073741824 # matches ateapi.ForkConfig.log_bytes_limit
+  int64 log_bytes_limit = 15;
+
+  // How long the actor may run before the worker terminates it.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  // +k8s:maximum=3600 # matches ateapi.ForkConfig.max_lifetime_seconds
+  int32 max_lifetime_seconds = 16;
+}
+
+message ForkResponse {
+  // The epoch of the worker process that started the forked actor.
+  int64 worker_epoch = 1;
+}
+
+message DropSeedRequest {
+  // The UID of the worker pod that holds the seed. If unset, atelet only
+  // removes the seed's node state.
+  //
+  // +k8s:optional
+  // +k8s:format=k8s-uuid
+  string worker_pod_uid = 1;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string atespace = 2;
+
+  // +k8s:required
+  // +k8s:format=k8s-short-name
+  string actor_name = 3;
+
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string actor_uid = 4;
+}
+
+message DropSeedResponse {
 }
 
 message TerminateRequest {

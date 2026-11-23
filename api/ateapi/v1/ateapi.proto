@@ -946,6 +946,12 @@ message ActorStatus {
   // +k8s:minimum=0
   // +k8s:update=NoUnset
   int32 last_assigned_generation = 7;
+
+  // fork is the fork state of an Actor whose template has fork_config. Set at
+  // creation. The role never changes.
+  //
+  // +k8s:optional
+  ActorFork fork = 8;
 }
 
 // ActorCrash describes the failure that moved an Actor to CRASHED.
@@ -1212,8 +1218,140 @@ message ActorTemplate {
   // +k8s:optional
   EgressPolicyTemplate golden_egress_policy = 9;
 
+  // fork_config makes the actors of this template start by forking a seed
+  // sandbox that each worker holds, instead of booting or restoring. A
+  // template with fork_config needs exactly one container with a wakeup probe,
+  // no volumes, and golden snapshots disabled. Its actors run once and are
+  // deleted when the workload exits. Needs gVisor workers on the KVM platform.
+  // Creating one needs the `can_create_fork_template` permission on the
+  // installation, and its actors must live in the template's atespace.
+  //
+  // +ate:preview=ForkSeed
+  // +k8s:ifDisabled(ForkSeed)=+k8s:forbidden
+  // +k8s:optional
+  ForkConfig fork_config = 10;
+
   // +k8s:optional
   ActorTemplateStatus status = 7;
+}
+
+// ForkMode selects how the actors of a template start.
+enum ForkMode {
+  // FORK_MODE_UNSPECIFIED is not a valid mode.
+  FORK_MODE_UNSPECIFIED = 0;
+  // FORK_MODE_SEED_AND_FORK keeps one seed sandbox per eligible worker and
+  // forks every actor from the seed on its worker.
+  FORK_MODE_SEED_AND_FORK = 1;
+  // Keep this in sync with ForkConfig.mode's maximum.
+}
+
+// ForkEgress selects the network egress of a forked actor.
+enum ForkEgress {
+  // FORK_EGRESS_UNSPECIFIED is the same as `FORK_EGRESS_NONE`.
+  FORK_EGRESS_UNSPECIFIED = 0;
+  // FORK_EGRESS_NONE gives the actor no egress: its TCP is captured and
+  // refused, and DNS is refused.
+  FORK_EGRESS_NONE = 1;
+  // FORK_EGRESS_GATEWAY sends the actor's egress through the egress gateway.
+  // The API rejects it for now.
+  FORK_EGRESS_GATEWAY = 2;
+  // Keep this in sync with ForkConfig.egress's maximum.
+}
+
+// ForkConfig describes how the actors of an ActorTemplate start by forking.
+// The template's `resources.limits` are the private limits of one forked
+// actor, and `seed_resources` is what a seed holds on a worker.
+message ForkConfig {
+  // mode is how actors of the template start.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  // +k8s:maximum=1 # keep this in sync with the ForkMode enum
+  ForkMode mode = 1;
+
+  // seed_resources is the compute a seed sandbox holds on a worker. It
+  // includes the pages that forked actors share with the seed. Both limits are
+  // required.
+  //
+  // +k8s:required
+  // +k8s:customValidation # cpu and memory limits are both set
+  ResourceRequirements seed_resources = 2;
+
+  // single_use must be true. A forked actor serves one workload, and is
+  // deleted once the workload exits.
+  //
+  // +k8s:required
+  bool single_use = 3;
+
+  // max_lifetime_seconds is how long a forked actor may run before the worker
+  // terminates it and the control plane deletes it.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  // +k8s:maximum=3600
+  int32 max_lifetime_seconds = 4;
+
+  // pids_limit is the most processes and threads a forked actor may run.
+  //
+  // +k8s:required
+  // +k8s:minimum=32
+  // +k8s:maximum=4096
+  int32 pids_limit = 5;
+
+  // log_bytes_limit is the most stdout and stderr bytes a forked actor may
+  // write before the worker terminates it.
+  //
+  // +k8s:required
+  // +k8s:minimum=1024
+  // +k8s:maximum=1073741824 # 1GiB
+  int64 log_bytes_limit = 6;
+
+  // egress is the network egress of the forked actors. Defaults to
+  // `FORK_EGRESS_NONE`.
+  //
+  // +k8s:optional
+  // +k8s:minimum=0
+  // +k8s:maximum=2 # keep this in sync with the ForkEgress enum
+  ForkEgress egress = 7;
+}
+
+// ForkRole says whether an Actor is a seed or a forked actor.
+enum ForkRole {
+  // FORK_ROLE_UNSPECIFIED is not a valid role.
+  FORK_ROLE_UNSPECIFIED = 0;
+  // FORK_ROLE_SEED is the system Actor that holds a seed sandbox on one worker.
+  FORK_ROLE_SEED = 1;
+  // FORK_ROLE_FORK is an Actor started by forking a seed.
+  FORK_ROLE_FORK = 2;
+  // Keep this in sync with ActorFork.role's maximum.
+}
+
+// ActorFork is the fork state of an Actor of a template with fork_config.
+message ActorFork {
+  // role says whether the Actor is a seed or a forked actor.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  // +k8s:maximum=2 # keep this in sync with the ForkRole enum
+  // +k8s:immutable
+  ForkRole role = 1;
+
+  // start_time is when the forked actor became RUNNING. The reaper measures
+  // max_lifetime_seconds from it.
+  //
+  // +k8s:optional
+  google.protobuf.Timestamp start_time = 2;
+
+  // exit_code is the exit status of the workload, set once the worker reports
+  // the exit.
+  //
+  // +k8s:optional
+  int32 exit_code = 3;
+
+  // exit_time is when the worker reported the workload exit.
+  //
+  // +k8s:optional
+  google.protobuf.Timestamp exit_time = 4;
 }
 
 // ResourceRequirements are the compute resources a workload may use.
@@ -2431,6 +2569,49 @@ message WorkerStatus {
   // +k8s:optional
   // +k8s:minimum=0
   int64 registered_epoch = 8;
+
+  // seeds are the ready seed sandboxes of this Worker, one per template. A
+  // forked actor can only be placed on a Worker that lists a seed for its
+  // template. The control plane adds an entry when the seed Actor is RUNNING
+  // and clears all entries when a new worker process registers, since a seed
+  // lives in its worker process.
+  //
+  // +k8s:optional
+  // +k8s:maxItems=64
+  // +k8s:listType=map
+  // +k8s:listMapKey=template_uid
+  repeated WorkerSeed seeds = 9;
+}
+
+// WorkerSeed is a ready seed sandbox on a Worker.
+message WorkerSeed {
+  // seed_actor is the seed Actor that holds the sandbox. It lives in the
+  // atespace of the template.
+  //
+  // +k8s:required
+  // +k8s:subfield(atespace)=+k8s:required
+  ObjectRef seed_actor = 1;
+
+  // seed_actor_uid is the UID of the seed Actor, which pins the entry to one
+  // incarnation.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string seed_actor_uid = 2;
+
+  // template_uid is the UID of the ActorTemplate the seed was built from. A
+  // template is immutable, so the UID also names the seed's generation.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string template_uid = 3;
+
+  // worker_epoch is the epoch of the worker process that holds the seed. The
+  // entry is only usable while it equals the Worker's `registered_epoch`.
+  //
+  // +k8s:required
+  // +k8s:minimum=1
+  int64 worker_epoch = 4;
 }
 
 // WorkerSandboxClass is one sandbox class a Worker runs, with the runtimes
@@ -2481,6 +2662,14 @@ message WorkerSandboxRuntime {
   //
   // +k8s:optional
   RuntimeOverhead actor_overhead = 2;
+
+  // The resource overhead incurred by a Worker for each forked Actor under
+  // this runtime, on top of the Actor's private limits. Same as actor_overhead
+  // otherwise. If not specified, a forked Actor is assumed to have negligible
+  // overhead.
+  //
+  // +k8s:optional
+  RuntimeOverhead fork_overhead = 3;
 
   // (-- TODO: Add an informational SandboxConfig version name (e.g. "gvisor-2")
   // once workers report one. --)
@@ -2745,6 +2934,16 @@ service WorkerService {
   // fails on its own if the sandbox is gone. Authorized like
   // RequestActorSuspend.
   rpc ReportActorCrashed(ReportActorCrashedRequest) returns (ReportActorCrashedResponse);
+
+  // ReportActorExited tells the control plane that the workload of a forked
+  // Actor the calling Worker hosts has exited. The control plane records the
+  // exit and deletes the Actor, since a forked actor runs once.
+  //
+  // A RUNNING Actor with the fork role is deleted. An Actor in any other state,
+  // or without the fork role, is left alone and the report is refused as
+  // FAILED_PRECONDITION. Repeating a report that landed gets NOT_FOUND once the
+  // Actor is gone. Authorized like ReportActorCrashed.
+  rpc ReportActorExited(ReportActorExitedRequest) returns (ReportActorExitedResponse);
 }
 
 message AcquireWorkerEpochRequest {
@@ -2986,6 +3185,42 @@ message ReportActorCrashedRequest {
 
 message ReportActorCrashedResponse {
   // The Actor as the report left it.
+  Actor actor = 1;
+}
+
+message ReportActorExitedRequest {
+  // The Worker making the report. atespace is always empty; Workers are
+  // global-scoped. atelet fills this in from its caller's certificate.
+  //
+  // +k8s:required
+  // +k8s:beta(since: "0.0")=+k8s:subfield(atespace)=+k8s:forbidden # TODO: get rid of beta prefix
+  ObjectRef worker = 1;
+
+  // The forked Actor whose workload exited. It must be assigned to worker.
+  //
+  // +k8s:required
+  // +k8s:subfield(atespace)=+k8s:required
+  ObjectRef actor = 2;
+
+  // The UID of the Actor the Worker believes it is hosting, as for
+  // RequestActorSuspend.
+  //
+  // +k8s:required
+  // +k8s:format=k8s-uuid
+  string actor_uid = 3;
+
+  // The exit status of the workload. A workload killed by a signal reports 128
+  // plus the signal number.
+  //
+  // +k8s:optional
+  // +k8s:minimum=0
+  // +k8s:maximum=255
+  int32 exit_code = 4;
+}
+
+message ReportActorExitedResponse {
+  // The Actor as the report left it, in the DELETING state when the delete did
+  // not finish.
   Actor actor = 1;
 }
 
