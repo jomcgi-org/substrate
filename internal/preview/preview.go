@@ -42,6 +42,11 @@ const (
 	// GateExternalVolumes controls whether external volumes are supported.
 	GateExternalVolumes Gate = "ExternalVolumes"
 
+	// GateForkSeed controls whether an ActorTemplate may set fork_config. Its
+	// actors start by forking a per-worker seed sandbox instead of booting.
+	// gVisor workers on the KVM platform only.
+	GateForkSeed Gate = "ForkSeed"
+
 	// GateGoldenEgressPolicy controls configuring a golden actor's egress policy on its template.
 	GateGoldenEgressPolicy Gate = "GoldenEgressPolicy"
 
@@ -59,6 +64,7 @@ const All = "ALL"
 // default and enabled via the --preview flag.
 var realKnownGates = []Gate{
 	GateExternalVolumes,
+	GateForkSeed,
 	GateGoldenEgressPolicy,
 	GatePerTemplateSnapshotLocation,
 }
