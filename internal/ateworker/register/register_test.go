@@ -917,3 +917,52 @@ func TestReconcilerSyncReportsActorOverhead(t *testing.T) {
 		t.Errorf("reported %d restorable runtimes, want 1", len(c.GetRestorableRuntimes()))
 	}
 }
+
+func TestReconcilerSyncReportsForkOverheadOnTheDefaultRuntime(t *testing.T) {
+	path := filepath.Join(t.TempDir(), nodepath.SandboxRuntimesFileName)
+	f := gvisorFile(sandboxruntimes.Attributes{hardware.AttrSandboxBundleHash: "sha256:v2"},
+		sandboxruntimes.Attributes{hardware.AttrSandboxBundleHash: "sha256:v1"})
+	if _, err := sandboxruntimes.Write(path, f); err != nil {
+		t.Fatal(err)
+	}
+	forkOverhead := &ateletpb.RuntimeOverhead{MemoryBytes: 16 << 20}
+	var got *ateletpb.SetWorkerSandboxRuntimesRequest
+	r := newReconciler(
+		ReportConfig{SandboxClass: "gvisor", RuntimesFile: path, ForkOverhead: forkOverhead},
+		3,
+		func() (*sandboxruntimes.File, error) { return sandboxruntimes.Read(path) },
+		func(_ context.Context, req *ateletpb.SetWorkerSandboxRuntimesRequest) error {
+			got = req
+			return nil
+		},
+	)
+	if retry, err := r.sync(context.Background()); retry || err != nil {
+		t.Fatalf("sync() = %v, %v, want false, nil", retry, err)
+	}
+	c := got.GetSandboxClasses()[0]
+	if diff := cmp.Diff(forkOverhead, c.GetDefaultRuntime().GetForkOverhead(), protocmp.Transform()); diff != "" {
+		t.Errorf("default runtime fork_overhead mismatch (-want +got):\n%s", diff)
+	}
+	for _, rt := range c.GetRestorableRuntimes() {
+		if rt.GetForkOverhead() != nil {
+			t.Errorf("a restorable runtime reports a fork overhead: %v", rt.GetForkOverhead())
+		}
+	}
+
+	// A worker without one reports none.
+	r = newReconciler(
+		ReportConfig{SandboxClass: "gvisor", RuntimesFile: path},
+		3,
+		func() (*sandboxruntimes.File, error) { return sandboxruntimes.Read(path) },
+		func(_ context.Context, req *ateletpb.SetWorkerSandboxRuntimesRequest) error {
+			got = req
+			return nil
+		},
+	)
+	if _, err := r.sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got.GetSandboxClasses()[0].GetDefaultRuntime().GetForkOverhead() != nil {
+		t.Error("a worker that holds no seeds reports a fork overhead")
+	}
+}

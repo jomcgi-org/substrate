@@ -102,3 +102,52 @@ func TestTruncateMessage(t *testing.T) {
 		t.Errorf("truncation split a rune")
 	}
 }
+
+// exitConn answers ReportActorExited with the queued errors, then OK.
+type exitConn struct {
+	grpc.ClientConnInterface
+	errs []error
+	got  []*ateletpb.ReportActorExitedRequest
+}
+
+func (c *exitConn) Invoke(_ context.Context, _ string, args, _ any, _ ...grpc.CallOption) error {
+	c.got = append(c.got, args.(*ateletpb.ReportActorExitedRequest))
+	if len(c.errs) == 0 {
+		return nil
+	}
+	err := c.errs[0]
+	c.errs = c.errs[1:]
+	return err
+}
+
+func TestReportExited(t *testing.T) {
+	tests := []struct {
+		name      string
+		errs      []error
+		wantErr   bool
+		wantCalls int
+	}{
+		{name: "accepted", wantCalls: 1},
+		// The control plane holds the actor for the resume that forked it.
+		{name: "retries while an operation holds the actor", errs: []error{status.Error(codes.Aborted, ""), status.Error(codes.Unavailable, "")}, wantCalls: 3},
+		{name: "a gone actor is an answer", errs: []error{status.Error(codes.NotFound, "")}, wantCalls: 1},
+		{name: "a refusal is an answer", errs: []error{status.Error(codes.FailedPrecondition, "")}, wantCalls: 1},
+		{name: "bad request is not retried", errs: []error{status.Error(codes.InvalidArgument, "")}, wantErr: true, wantCalls: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := &exitConn{errs: tc.errs}
+			err := reportExitedWithRetry(context.Background(), conn, testActor, 3, time.Millisecond)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
+			}
+			if len(conn.got) != tc.wantCalls {
+				t.Fatalf("calls = %d, want %d", len(conn.got), tc.wantCalls)
+			}
+			req := conn.got[0]
+			if req.GetActorAtespace() != "team-a" || req.GetActorName() != "actor-1" || req.GetActorUid() != testActor.UID || req.GetExitCode() != 3 {
+				t.Errorf("request = %v", req)
+			}
+		})
+	}
+}

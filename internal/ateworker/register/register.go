@@ -185,6 +185,18 @@ func setActorOverhead(req *ateletpb.SetWorkerSandboxRuntimesRequest, overhead *a
 	}
 }
 
+// setForkOverhead reports a copy of overhead on the default runtime in req.
+// Only a worker that can hold seeds and fork from them has one, and the seeds
+// are built from the default runtime.
+func setForkOverhead(req *ateletpb.SetWorkerSandboxRuntimesRequest, overhead *ateletpb.RuntimeOverhead) {
+	if overhead == nil {
+		return
+	}
+	for _, c := range req.GetSandboxClasses() {
+		c.GetDefaultRuntime().ForkOverhead = proto.CloneOf(overhead)
+	}
+}
+
 // classOf returns f's entry for class, or nil when the file has none.
 func classOf(f *sandboxruntimes.File, class string) *sandboxruntimes.Class {
 	for i := range f.SandboxClasses {
@@ -230,6 +242,10 @@ type ReportConfig struct {
 	// ActorOverhead is what each actor costs the worker on top of its own
 	// limits, reported on every runtime. Nil is none.
 	ActorOverhead *ateletpb.RuntimeOverhead
+	// ForkOverhead is what each forked actor costs the worker on top of its own
+	// limits, reported on the default runtime. Nil for a worker that holds no
+	// seeds, which keeps seeds and forked actors off it.
+	ForkOverhead *ateletpb.RuntimeOverhead
 	// SandboxClass is the class this worker implements ("gvisor", "microvm").
 	SandboxClass string
 	// RuntimesFile is the sandbox runtimes file atelet keeps for this worker
@@ -449,6 +465,7 @@ func (r *reconciler) sync(ctx context.Context) (retry bool, err error) {
 	}
 	req := buildRuntimesRequest(r.epoch, class)
 	setActorOverhead(req, r.cfg.ActorOverhead)
+	setForkOverhead(req, r.cfg.ForkOverhead)
 	if proto.Equal(req, r.reported) {
 		return false, nil
 	}

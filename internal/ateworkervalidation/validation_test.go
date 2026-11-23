@@ -838,3 +838,116 @@ func TestValidateGetWorkloadStatsRequestEdge(t *testing.T) {
 		t.Fatalf("empty request error = %v, want InvalidArgument", err)
 	}
 }
+
+func validSeedWorkloadRequest(mutate ...func(*ateworkerpb.SeedWorkloadRequest)) *ateworkerpb.SeedWorkloadRequest {
+	r := &ateworkerpb.SeedWorkloadRequest{
+		Atespace: "team-a", ActorName: "seed-1", ActorUid: "01234567-89ab-cdef-0123-456789abcdef",
+		ActorTemplateAtespace: "team-a", ActorTemplateName: "scan", TemplateUid: "11234567-89ab-cdef-0123-456789abcdef",
+		RunscPath:       "/opt/runsc",
+		Spec:            &ateworkerpb.WorkloadSpec{Containers: []*ateworkerpb.Container{{Name: "main"}}},
+		RootfsImagePath: "/actors/uid/seed-rootfs/rootfs.erofs",
+		RootfsSha256:    strings.Repeat("a", 64),
+		Resources:       &ateworkerpb.ResourceRequirements{Limits: &ateworkerpb.Resources{CpuMillicores: 1000, MemoryBytes: 1 << 30}},
+		ActorDirs:       fullActorDirs(),
+	}
+	for _, m := range mutate {
+		m(r)
+	}
+	return r
+}
+
+func TestValidateSeedWorkloadRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ateworkerpb.SeedWorkloadRequest)
+		want   field.ErrorList
+	}{
+		{name: "valid"},
+		{name: "no container", mutate: func(r *ateworkerpb.SeedWorkloadRequest) { r.Spec.Containers = nil },
+			want: field.ErrorList{field.Required(field.NewPath("spec", "containers"), "")}},
+		{name: "short hash", mutate: func(r *ateworkerpb.SeedWorkloadRequest) { r.RootfsSha256 = "abc" },
+			want: field.ErrorList{field.TooShort[string](field.NewPath("rootfs_sha256"), "", 64).WithOrigin("minLength")}},
+		{name: "no image path", mutate: func(r *ateworkerpb.SeedWorkloadRequest) { r.RootfsImagePath = "" },
+			want: field.ErrorList{field.Required(field.NewPath("rootfs_image_path"), "")}},
+		{name: "no template uid", mutate: func(r *ateworkerpb.SeedWorkloadRequest) { r.TemplateUid = "" },
+			want: field.ErrorList{field.Required(field.NewPath("template_uid"), "")}},
+		{name: "bad actor uid", mutate: func(r *ateworkerpb.SeedWorkloadRequest) { r.ActorUid = "../x" },
+			want: field.ErrorList{field.Invalid(field.NewPath("actor_uid"), nil, "").WithOrigin("format=k8s-uuid")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mutate []func(*ateworkerpb.SeedWorkloadRequest)
+			if tt.mutate != nil {
+				mutate = append(mutate, tt.mutate)
+			}
+			matchFieldErrors(t, tt.want, Validate_SeedWorkloadRequest(context.Background(), createOp(), nil, validSeedWorkloadRequest(mutate...), nil))
+		})
+	}
+}
+
+func validForkWorkloadRequest(mutate ...func(*ateworkerpb.ForkWorkloadRequest)) *ateworkerpb.ForkWorkloadRequest {
+	r := &ateworkerpb.ForkWorkloadRequest{
+		Atespace: "team-a", ActorName: "fork-1", ActorUid: "21234567-89ab-cdef-0123-456789abcdef",
+		ActorTemplateAtespace: "team-a", ActorTemplateName: "scan", TemplateUid: "11234567-89ab-cdef-0123-456789abcdef",
+		SeedActorUid: "01234567-89ab-cdef-0123-456789abcdef", SeedWorkerEpoch: 7,
+		Spec:      &ateworkerpb.WorkloadSpec{Containers: []*ateworkerpb.Container{{Name: "main"}}},
+		Resources: &ateworkerpb.ResourceRequirements{Limits: &ateworkerpb.Resources{CpuMillicores: 500, MemoryBytes: 256 << 20}},
+		Env:       []string{"ATE_ACTOR_NAME=fork-1"},
+		PidsLimit: 64, LogBytesLimit: 1 << 20, MaxLifetimeSeconds: 60,
+		ActorDirs: fullActorDirs(),
+	}
+	for _, m := range mutate {
+		m(r)
+	}
+	return r
+}
+
+func TestValidateForkWorkloadRequest(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ateworkerpb.ForkWorkloadRequest)
+		want   field.ErrorList
+	}{
+		{name: "valid"},
+		{name: "no seed", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.SeedActorUid = "" },
+			want: field.ErrorList{field.Required(field.NewPath("seed_actor_uid"), "")}},
+		{name: "no seed epoch", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.SeedWorkerEpoch = 0 },
+			want: field.ErrorList{field.Required(field.NewPath("seed_worker_epoch"), "")}},
+		{name: "too few pids", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.PidsLimit = 4 },
+			want: field.ErrorList{field.Invalid(field.NewPath("pids_limit"), nil, "").WithOrigin("minimum")}},
+		{name: "too long a lifetime", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.MaxLifetimeSeconds = 3601 },
+			want: field.ErrorList{field.Invalid(field.NewPath("max_lifetime_seconds"), nil, "").WithOrigin("maximum")}},
+		{name: "too many env entries", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.Env = make([]string, 9) },
+			want: field.ErrorList{field.TooMany(field.NewPath("env"), 9, 8).WithOrigin("maxItems")}},
+		{name: "no container", mutate: func(r *ateworkerpb.ForkWorkloadRequest) { r.Spec.Containers = nil },
+			want: field.ErrorList{field.Required(field.NewPath("spec", "containers"), "")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mutate []func(*ateworkerpb.ForkWorkloadRequest)
+			if tt.mutate != nil {
+				mutate = append(mutate, tt.mutate)
+			}
+			matchFieldErrors(t, tt.want, Validate_ForkWorkloadRequest(context.Background(), createOp(), nil, validForkWorkloadRequest(mutate...), nil))
+		})
+	}
+}
+
+func TestValidateDropSeedRequest(t *testing.T) {
+	valid := func() *ateworkerpb.DropSeedRequest {
+		return &ateworkerpb.DropSeedRequest{Atespace: "team-a", ActorName: "seed-1", ActorUid: "01234567-89ab-cdef-0123-456789abcdef"}
+	}
+	if err := ValidateDropSeedRequest(context.Background(), valid()); err != nil {
+		t.Errorf("a valid request = %v", err)
+	}
+	noUID := valid()
+	noUID.ActorUid = ""
+	if err := ValidateDropSeedRequest(context.Background(), noUID); apierror.Code(err) != codes.InvalidArgument {
+		t.Errorf("a request with no uid = %v, want InvalidArgument", err)
+	}
+}
+
+func matchFieldErrors(t *testing.T, want, got field.ErrorList) {
+	t.Helper()
+	field.ErrorMatcher{}.ByType().ByField().ByOrigin().Test(t, want, got)
+}

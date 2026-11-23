@@ -60,6 +60,30 @@ func ValidateTerminateWorkloadRequest(ctx context.Context, req *ateworkerpb.Term
 	return nil
 }
 
+// ValidateSeedWorkloadRequest validates req at the RPC edge.
+func ValidateSeedWorkloadRequest(ctx context.Context, req *ateworkerpb.SeedWorkloadRequest) error {
+	if errs := Validate_SeedWorkloadRequest(ctx, createOp(), nil, req, nil); len(errs) > 0 {
+		return resources.ToAPIError(errs)
+	}
+	return nil
+}
+
+// ValidateForkWorkloadRequest validates req at the RPC edge.
+func ValidateForkWorkloadRequest(ctx context.Context, req *ateworkerpb.ForkWorkloadRequest) error {
+	if errs := Validate_ForkWorkloadRequest(ctx, createOp(), nil, req, nil); len(errs) > 0 {
+		return resources.ToAPIError(errs)
+	}
+	return nil
+}
+
+// ValidateDropSeedRequest validates req at the RPC edge.
+func ValidateDropSeedRequest(ctx context.Context, req *ateworkerpb.DropSeedRequest) error {
+	if errs := Validate_DropSeedRequest(ctx, createOp(), nil, req, nil); len(errs) > 0 {
+		return resources.ToAPIError(errs)
+	}
+	return nil
+}
+
 // ValidateGetWorkloadStatsRequest validates req at the RPC edge.
 func ValidateGetWorkloadStatsRequest(ctx context.Context, req *ateworkerpb.GetWorkloadStatsRequest) error {
 	if errs := Validate_GetWorkloadStatsRequest(ctx, createOp(), nil, req, nil); len(errs) > 0 {

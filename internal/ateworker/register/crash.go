@@ -116,3 +116,50 @@ func truncateMessage(message string) string {
 func utf8RuneStart(b byte) bool {
 	return b&0xC0 != 0x80
 }
+
+// ReportExited reports that the workload of a forked actor this ateworker hosts
+// exited, retrying as ReportCrashed does. The control plane deletes the actor,
+// and may still hold it for the resume that started it, which it answers with
+// Aborted until that ends.
+func (r *CrashReporter) ReportExited(ctx context.Context, actor resources.ActorAttribution, exitCode int32) error {
+	conn, err := ateletdial.Dial(r.socketPath, r.tlsConfig)
+	if err != nil {
+		return fmt.Errorf("dial atelet: %w", err)
+	}
+	defer conn.Close()
+	return reportExitedWithRetry(ctx, conn, actor, exitCode, initialReportBackoff)
+}
+
+func reportExitedWithRetry(ctx context.Context, conn grpc.ClientConnInterface, actor resources.ActorAttribution, exitCode int32, backoff time.Duration) error {
+	req := &ateletpb.ReportActorExitedRequest{
+		ActorAtespace: actor.Ref.Atespace,
+		ActorName:     actor.Ref.Name,
+		ActorUid:      actor.UID,
+		ExitCode:      exitCode,
+	}
+	for {
+		callCtx, cancel := context.WithTimeout(ctx, reportTimeout)
+		_, err := ateletpb.NewWorkerSupportClient(conn).ReportActorExited(callCtx, req)
+		cancel()
+		switch status.Code(err) {
+		case codes.OK:
+			return nil
+		case codes.NotFound, codes.FailedPrecondition:
+			slog.InfoContext(ctx, "Control plane declined the actor exit report",
+				slog.String("actor", actor.Ref.String()),
+				slog.String("actor_uid", actor.UID),
+				slog.Any("err", err))
+			return nil
+		case codes.Unavailable, codes.Aborted, codes.ResourceExhausted, codes.DeadlineExceeded:
+		default:
+			return fmt.Errorf("reporting actor exit: %w", err)
+		}
+		slog.WarnContext(ctx, "Retrying actor exit report", slog.Duration("in", backoff), slog.Any("err", err))
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("reporting actor exit: %w (last error: %w)", ctx.Err(), err)
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, maxReportBackoff)
+	}
+}
