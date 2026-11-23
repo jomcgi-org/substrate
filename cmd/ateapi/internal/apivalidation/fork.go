@@ -68,6 +68,11 @@ func validateForkTemplate(fldPath *field.Path, tmpl *ateapi.ActorTemplate) field
 		if ctr.GetWakeupProbe() == nil {
 			errs = append(errs, field.Required(fldPath.Child("containers").Index(i).Child("wakeup_probe"), "a template with fork_config needs a wakeup probe"))
 		}
+		// A seed runs with an empty capability set, so the template cannot add to it.
+		if len(ctr.GetSecurityContext().GetCapabilities().GetAdd()) > 0 {
+			errs = append(errs, field.Forbidden(fldPath.Child("containers").Index(i).Child("security_context", "capabilities", "add"),
+				"a seed runs without capabilities"))
+		}
 		for j, env := range ctr.GetEnv() {
 			if name := env.GetName(); hasSecretMarker(name) {
 				errs = append(errs, field.Forbidden(fldPath.Child("containers").Index(i).Child("env").Index(j).Child("name"),

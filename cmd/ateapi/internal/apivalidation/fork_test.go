@@ -166,6 +166,13 @@ func TestValidateCreateActorTemplateRequest_ForkConfig(t *testing.T) {
 		}},
 		want: field.ErrorList{field.Forbidden(field.NewPath("actor_template", "containers").Index(0).Child("env").Index(0).Child("name"), "")},
 	}, {
+		name:  "added capabilities",
+		gates: "ForkSeed",
+		mutate: []func(*ateapi.ActorTemplate){func(tmpl *ateapi.ActorTemplate) {
+			tmpl.Containers[0].SecurityContext = &ateapi.SecurityContext{Capabilities: &ateapi.Capabilities{Add: []string{"CHOWN"}}}
+		}},
+		want: field.ErrorList{field.Forbidden(field.NewPath("actor_template", "containers").Index(0).Child("security_context", "capabilities", "add"), "")},
+	}, {
 		name:  "plain env name",
 		gates: "ForkSeed",
 		mutate: []func(*ateapi.ActorTemplate){func(tmpl *ateapi.ActorTemplate) {
