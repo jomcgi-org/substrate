@@ -67,7 +67,7 @@ func SetupPostgresPersistence(t *testing.T) *atepg.Persistence {
 	t.Helper()
 	ctx := context.Background()
 	admin := requireAdminPool(t)
-	databaseName := fmt.Sprintf("ateapi_test_%d", databaseCount.Add(1))
+	databaseName := fmt.Sprintf("ateapi_test_%d_%d", os.Getpid(), databaseCount.Add(1))
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+databaseName); err != nil {
 		t.Fatalf("creating PostgreSQL test database: %v", err)
 	}
@@ -252,6 +252,11 @@ func requireAdminPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	containerOnce.Do(func() {
 		ctx := context.Background()
+		// A PostgreSQL the developer already runs, for hosts without Docker.
+		if dsn := os.Getenv("ATE_TEST_POSTGRES_DSN"); dsn != "" {
+			adminPool, containerErr = pgxpool.New(ctx, dsn)
+			return
+		}
 		if err := dockerenv.Configure(ctx); err != nil {
 			containerErr = err
 			return

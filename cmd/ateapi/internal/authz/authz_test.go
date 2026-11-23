@@ -17,10 +17,12 @@ package authz
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -64,6 +66,9 @@ func configureDockerEnv(ctx context.Context) error {
 func startPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
+	if dsn := os.Getenv("ATE_TEST_POSTGRES_DSN"); dsn != "" {
+		return startExistingPostgres(t, ctx, dsn)
+	}
 	// Without Docker the tests skip locally, but must fail in CI, where a
 	// skip would pass the package without running it.
 	unavailable := t.Skipf
@@ -565,4 +570,41 @@ func TestAtespacedObjects_NoCollision(t *testing.T) {
 	if o1, o2 := ActorObject("a", "b"), ActorTemplateObject("a", "b"); o1 == o2 {
 		t.Errorf("ActorObject and ActorTemplateObject collided on %q", o1)
 	}
+}
+
+var existingDBCount atomic.Uint64
+
+// startExistingPostgres migrates a new database on the PostgreSQL at dsn, for
+// hosts without Docker.
+func startExistingPostgres(t *testing.T, ctx context.Context, dsn string) *pgxpool.Pool {
+	t.Helper()
+	admin, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connecting to %s: %v", dsn, err)
+	}
+	t.Cleanup(admin.Close)
+	name := fmt.Sprintf("authz_test_%d_%d", os.Getpid(), existingDBCount.Add(1))
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		t.Fatalf("creating test database: %v", err)
+	}
+	cfg := admin.Config().Copy()
+	cfg.ConnConfig.Database = name
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("connecting to test database: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Close()
+		_, _ = admin.Exec(context.Background(), "DROP DATABASE "+name)
+	})
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS("../store/atepg/migrations"))
+	if err != nil {
+		t.Fatalf("create goose provider: %v", err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatalf("run Substrate and OpenFGA migrations: %v", err)
+	}
+	return pool
 }
