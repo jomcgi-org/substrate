@@ -61,6 +61,7 @@ func ValidateCustom_CreateActorTemplateRequest_ActorTemplate(_ context.Context, 
 	if value.GetGoldenEgressPolicy() != nil && value.GetSnapshotConfig().GetGoldenSnapshotConfig().GetMode() == ateapi.GoldenSnapshotMode_GOLDEN_SNAPSHOT_MODE_DISABLED {
 		errs = append(errs, field.Forbidden(fldPath.Child("golden_egress_policy"), "requires golden snapshots to be enabled"))
 	}
+	errs = append(errs, validateForkTemplate(fldPath, value)...)
 	declared := make(map[string]bool, len(value.GetVolumes()))
 	for _, vol := range value.GetVolumes() {
 		declared[vol.GetName()] = true
