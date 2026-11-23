@@ -134,10 +134,26 @@ func buildBusyboxImage(t *testing.T, dir string) (path, digest string) {
 	if err := os.WriteFile(filepath.Join(root, "reply"), []byte(reply), 0o444); err != nil {
 		t.Fatal(err)
 	}
+	// The image is built the way atelet builds it (cmd/atelet/erofs.go): mkfs.erofs
+	// reads a tar stream, without inline data, with a fixed timestamp and UUID.
 	path = filepath.Join(dir, "busybox.erofs")
-	out, err := exec.Command("mkfs.erofs", "-E", "noinline_data", "-T", "0", "-U", erofsUUID, path, root).CombinedOutput()
+	mkfs := exec.Command("mkfs.erofs", "--tar=f", "-E", "noinline_data", "-T", "0", "-U", erofsUUID, "--quiet", path)
+	tarCmd := exec.Command("tar", "--sort=name", "--owner=0", "--group=0", "--numeric-owner", "-C", root, "-cf", "-", ".")
+	pipe, err := tarCmd.StdoutPipe()
 	if err != nil {
-		t.Fatalf("mkfs.erofs: %v\n%s", err, out)
+		t.Fatal(err)
+	}
+	mkfs.Stdin = pipe
+	var mkfsOut bytes.Buffer
+	mkfs.Stdout, mkfs.Stderr = &mkfsOut, &mkfsOut
+	if err := mkfs.Start(); err != nil {
+		t.Fatalf("mkfs.erofs: %v", err)
+	}
+	if err := tarCmd.Run(); err != nil {
+		t.Fatalf("tar: %v", err)
+	}
+	if err := mkfs.Wait(); err != nil {
+		t.Fatalf("mkfs.erofs: %v\n%s", err, mkfsOut.String())
 	}
 	if err := os.Chmod(path, 0o444); err != nil {
 		t.Fatal(err)
@@ -1004,5 +1020,93 @@ func TestRealForkdEngine(t *testing.T) {
 			t.Logf("FULLPATH n=%d children=%d failed=%d manager_fork_ms_med=%.1f p95=%.1f fork_to_result_ms_med=%.1f p95=%.1f",
 				n, len(forkMS), failed, forkMS[len(forkMS)/2], forkMS[len(forkMS)*95/100], resultMS[len(resultMS)/2], resultMS[len(resultMS)*95/100])
 		}
+	}
+}
+
+// TestRealForkdHoldChildren forks children of a probe guest through the worker
+// path and holds them for host-side isolation checks. It writes the host pids
+// of the seed and the children to $ATE_TEST_ISO_DIR/beacon, then waits for the
+// file $ATE_TEST_ISO_DIR/done. When $ATE_TEST_ISO_GO is set it writes
+// seeded and waits for go before it forks, so a tracer can attach first.
+// The image is built from the guest of the gVisor fork's isolation probes.
+func TestRealForkdHoldChildren(t *testing.T) {
+	dir := os.Getenv("ATE_TEST_ISO_DIR")
+	image := os.Getenv("ATE_TEST_ISO_IMAGE")
+	if dir == "" || image == "" {
+		t.Skip("ATE_TEST_ISO_DIR and ATE_TEST_ISO_IMAGE name no probe image and directory")
+	}
+	n, _ := strconv.Atoi(os.Getenv("ATE_TEST_ISO_N"))
+	if n == 0 {
+		n = 4
+	}
+	f := newRealFixture(t)
+	f.useImage(image, fileSHA256Must(t, image))
+	f.host.mu.Lock()
+	f.host.probe = func(ctx context.Context, uid string) error {
+		for {
+			if out, _ := f.logOf(uid); strings.Contains(out, `"results"`) && strings.HasSuffix(strings.TrimSpace(out), "}") {
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Millisecond):
+			}
+		}
+	}
+	f.host.mu.Unlock()
+	uid := f.uid("seed")
+	// The canary is in the seed's environment, like a secret that a template
+	// must not hold: every child can read it.
+	req := f.seedRequest("team-a", uid, []string{"/guest"}, []string{"SECRET_CANARY=canary-seed-env"}, 512<<20)
+	if err := f.m.seed(t.Context(), req, forkTestEpoch); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	seeds := f.forkdSeeds()
+	if len(seeds) != 1 {
+		t.Fatalf("forkd seeds: %+v", seeds)
+	}
+	waitFile := func(name string, d time.Duration) {
+		deadline := time.Now().Add(d)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatalf("no %s file", name)
+	}
+	if os.Getenv("ATE_TEST_ISO_GO") != "" {
+		if err := os.WriteFile(filepath.Join(dir, "seeded"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		waitFile("go", 120*time.Second)
+	}
+	var uids []string
+	for i := 0; i < n; i++ {
+		id := f.uid("child")
+		freq := f.forkRequest("team-a", uid, id, 256<<20, "ATE_ACTOR_MODE=ident+procgvisor+net", fmt.Sprintf("ATE_ACTOR_MARK=child-%d", i))
+		freq.Spec.Containers[0].WakeupProbe = nil
+		if err := f.m.fork(t.Context(), freq, forkTestEpoch); err != nil {
+			t.Fatalf("fork %d: %v", i, err)
+		}
+		uids = append(uids, id)
+	}
+	line := fmt.Sprintf("template=%d", seeds[0].PID)
+	for _, k := range f.forkdChildren() {
+		line += fmt.Sprintf(" child=%d", k.PID)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "beacon"), []byte(line+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i, id := range uids {
+		out, _ := f.logOf(id)
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("child%d.stdout", i)), []byte(out), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitFile("done", 300*time.Second)
+	for _, id := range uids {
+		_ = f.m.terminate(t.Context(), id)
 	}
 }
