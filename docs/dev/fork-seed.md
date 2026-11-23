@@ -56,8 +56,11 @@ slice.
 
 - API: `ActorTemplate.fork_config`, `ActorStatus.fork`, `Worker.status.seeds`,
   `WorkerSandboxRuntime.fork_overhead`, `WorkerService.ReportActorExited`.
-- atelet: `Seed`, `Fork`, `DropSeed`. `Seed` needs `mkfs.erofs` (flag
-  `--mkfs-erofs`), which the atelet image must carry.
+- atelet: `Seed`, `Fork`, `DropSeed`. `Seed` needs `mkfs.erofs`. The atelet
+  image carries a static one in `/var/run/ko/mkfs.erofs-<arch>`, which
+  `hack/build-mkfs-erofs.sh` builds into `cmd/atelet/kodata` before ko runs
+  (the release jobs do). `--mkfs-erofs` overrides the path. The images are built
+  without inline data, which the sentry cannot map.
 - ateworker-gvisor: `SeedWorkload`, `ForkWorkload`, `DropSeed`, with
   `--fork-platform=kvm`. It starts `forkd` from `gvisor-bin/forkd` of the
   SandboxConfig tarball and speaks version 2 of the forkd protocol of the gVisor
