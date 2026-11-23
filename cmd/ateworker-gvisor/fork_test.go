@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -68,6 +69,8 @@ type fakeHost struct {
 	hostErr  error
 	probeErr error
 	onProbe  func()
+	// holdProbe makes Probe wait for its context to end.
+	holdProbe bool
 }
 
 func (h *fakeHost) Host(_ context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64) (string, error) {
@@ -80,12 +83,16 @@ func (h *fakeHost) Host(_ context.Context, actor resources.ActorAttribution, _ *
 	return "/proc/1/fd/9", nil
 }
 
-func (h *fakeHost) Probe(context.Context, string, []*ateworkerpb.Container) error {
+func (h *fakeHost) Probe(ctx context.Context, _ string, _ []*ateworkerpb.Container) error {
 	h.mu.Lock()
-	hook, err := h.onProbe, h.probeErr
+	hook, err, hold := h.onProbe, h.probeErr, h.holdProbe
 	h.mu.Unlock()
 	if hook != nil {
 		hook()
+	}
+	if hold {
+		<-ctx.Done()
+		return ctx.Err()
 	}
 	return err
 }
@@ -259,6 +266,9 @@ func TestForkManagerSeedAndFork(t *testing.T) {
 	if !s.DropCapabilities {
 		t.Error("a seed keeps capabilities")
 	}
+	if s.Cgroup == nil || s.Cgroup.MemoryMax != 1<<30 || s.Cgroup.MemoryHigh != 0 {
+		t.Errorf("seed cgroup = %+v, want memory.max of the seed resources (1Gi)", s.Cgroup)
+	}
 	if len(s.Tmpfs) != 1 || s.Tmpfs[0].Path != "/tmp" || s.Tmpfs[0].SizeBytes != 512<<20 {
 		t.Errorf("seed tmpfs = %+v, want /tmp at half the memory", s.Tmpfs)
 	}
@@ -286,8 +296,8 @@ func TestForkManagerSeedAndFork(t *testing.T) {
 	if len(r.Env) != 1 || r.Env[0] != "ATE_ACTOR_NAME=fork-1" {
 		t.Errorf("fork env = %v", r.Env)
 	}
-	if r.Cgroup == nil || r.Cgroup.CPUMax != "50000 100000" || r.Cgroup.MemoryHigh != 256<<20 || r.Cgroup.PidsMax != 64 {
-		t.Errorf("fork cgroup = %+v, want 0.5 cpu, 256Mi memory.high and 64 pids", r.Cgroup)
+	if r.Cgroup == nil || r.Cgroup.CPUMax != "50000 100000" || r.Cgroup.MemoryMax != 256<<20+forkOverhead.GetMemoryBytes() || r.Cgroup.MemoryHigh != 0 || r.Cgroup.PidsMax != 64 {
+		t.Errorf("fork cgroup = %+v, want 0.5 cpu, memory.max of 256Mi plus the fork overhead, no memory.high and 64 pids", r.Cgroup)
 	}
 	if r.Net == nil || r.Net.NetNSPath != "/proc/1/fd/9" {
 		t.Errorf("fork net = %+v, want the actor's namespace", r.Net)
@@ -444,6 +454,47 @@ func TestForkManagerForkRefusals(t *testing.T) {
 	}
 }
 
+// forkd refuses a cgroup parent that is not an absolute path below
+// /sys/fs/cgroup, so the launcher passes the path as it is.
+func TestForkdLauncherArgs(t *testing.T) {
+	l := execForkdLauncher{stateDir: "/run/ate/forkd", cgroupParent: "/sys/fs/cgroup/forkd", uid: 1234}
+	want := []string{
+		"--forkd-state-dir=/run/ate/forkd",
+		"--forkd-cgroup-parent=/sys/fs/cgroup/forkd",
+		"--forkd-env-prefixes=ATE_ACTOR_",
+		"--forkd-allow-uids=1234",
+	}
+	if got := l.args(); !slices.Equal(got, want) {
+		t.Errorf("args = %v, want %v", got, want)
+	}
+}
+
+// A child that ends while the wakeup probe polls fails the start at once.
+func TestForkManagerChildEndsDuringTheProbe(t *testing.T) {
+	f := newForkFixture(t)
+	f.seed()
+	f.host.mu.Lock()
+	f.host.holdProbe = true
+	f.host.onProbe = func() { f.fake.Exit(forkTestChildUID, forkdtest.ExitCode(3)) }
+	f.host.mu.Unlock()
+	start := time.Now()
+	err := f.m.fork(t.Context(), f.forkRequest(), forkTestEpoch)
+	if got := apierror.Code(err); got != codes.FailedPrecondition {
+		t.Fatalf("fork() = %v, want FailedPrecondition", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("fork() took %v to notice that the child ended", elapsed)
+	}
+	// The child's watcher or the failed fork removes it, whichever comes first.
+	deadline := time.Now().Add(5 * time.Second)
+	for len(f.host.unhostedUIDs()) == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := f.host.unhostedUIDs(); len(got) != 1 {
+		t.Errorf("unhosted %v, want the child once", got)
+	}
+}
+
 func TestForkManagerSeedRefusals(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -462,6 +513,9 @@ func TestForkManagerSeedRefusals(t *testing.T) {
 			r.RootfsImagePath = "/etc/passwd"
 		}, codes.InvalidArgument},
 		{"an image that is gone", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) { _ = os.Remove(f.rootfs) }, codes.FailedPrecondition},
+		{"no memory limit to cap the seed with", func(_ *forkFixture, r *ateworkerpb.SeedWorkloadRequest) {
+			r.Resources.Limits.MemoryBytes = 0
+		}, codes.InvalidArgument},
 		{"no process", func(_ *forkFixture, r *ateworkerpb.SeedWorkloadRequest) {
 			r.Spec.Containers[0].ContainerSpec.Args = nil
 		}, codes.InvalidArgument},
@@ -470,7 +524,9 @@ func TestForkManagerSeedRefusals(t *testing.T) {
 		}, codes.PermissionDenied},
 		{"forkd cannot start", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) { f.launcher.err = errors.New("no such file") }, codes.FailedPrecondition},
 		{"a forkd on another platform", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) { f.fake.Hello.Platform = "systrap" }, codes.FailedPrecondition},
-		{"a forkd of another protocol", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) { f.fake.Hello.ProtocolVersion = 2 }, codes.FailedPrecondition},
+		{"a forkd of another protocol", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) {
+			f.fake.Hello.ProtocolVersion = forkd.ProtocolVersion + 1
+		}, codes.FailedPrecondition},
 		{"a forkd that failed an assertion", func(f *forkFixture, _ *ateworkerpb.SeedWorkloadRequest) {
 			f.fake.Hello.Assertions = append(f.fake.Hello.Assertions, forkd.Assertion{Name: "sentry_seccomp", OK: false, Detail: "disabled"})
 		}, codes.FailedPrecondition},

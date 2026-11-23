@@ -26,7 +26,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -113,6 +112,9 @@ type forkChild struct {
 	attribution resources.ActorAttribution
 	seedUID     string
 	stopLogs    func()
+	// ended closes when forkd reports the child over. exit is set before it.
+	ended chan struct{}
+	exit  *forkd.ExitInfo
 }
 
 // forkManager holds the seeds and forked actors of one worker process.
@@ -279,6 +281,9 @@ func (m *forkManager) seed(ctx context.Context, req *ateworkerpb.SeedWorkloadReq
 	}
 
 	memory := sizing.FromLimits(req.GetResources().GetLimits()).MemoryBytes
+	if memory <= 0 {
+		return apierror.InvalidArgument("resources: a seed needs a memory limit, which caps its cgroup")
+	}
 	seedReq := &forkd.SeedRequest{
 		SeedID:           req.GetActorUid(),
 		Image:            req.GetRootfsImagePath(),
@@ -290,8 +295,11 @@ func (m *forkManager) seed(ctx context.Context, req *ateworkerpb.SeedWorkloadReq
 		GID:              ctr.GetUser().GetGid(),
 		DropCapabilities: true,
 		Tmpfs:            []forkd.Tmpfs{{Path: "/tmp", SizeBytes: uint64(max(memory/2, 0))}},
-		Workers:          1,
-		CPUs:             max(sizing.FromLimits(req.GetResources().GetLimits()).VCPUs(), 1),
+		// The seed holds the pages that its children share, so seed_resources is
+		// the cap of the cgroup the seed runs in. The guest sees it as its memory.
+		Cgroup:  &forkd.Cgroup{MemoryMax: memory},
+		Workers: 1,
+		CPUs:    max(sizing.FromLimits(req.GetResources().GetLimits()).VCPUs(), 1),
 	}
 	seedCtx, cancel := context.WithTimeout(ctx, forkdSeedTimeout)
 	defer cancel()
@@ -416,10 +424,12 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 		SeedID:  seed.attribution.UID,
 		ChildID: actor.UID,
 		Env:     req.GetEnv(),
+		// memory.max kills at the limit. memory.high would only throttle a child
+		// that stays above it. The sentry's own memory is what fork_overhead books.
 		Cgroup: &forkd.Cgroup{
-			CPUMax:     cpuMax(limits.MilliCPU),
-			MemoryHigh: limits.MemoryBytes,
-			PidsMax:    int64(req.GetPidsLimit()),
+			CPUMax:    cpuMax(limits.MilliCPU),
+			MemoryMax: limits.MemoryBytes + forkOverhead.GetMemoryBytes(),
+			PidsMax:   int64(req.GetPidsLimit()),
 		},
 		Net:           &forkd.Net{NetNSPath: netns},
 		MaxLifetimeMS: int64(req.GetMaxLifetimeSeconds()) * 1000,
@@ -429,7 +439,7 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 		unwind()
 		return forkdError("fork", err)
 	}
-	entry := &forkChild{attribution: actor, seedUID: seed.attribution.UID, stopLogs: m.tailLogs(actor, child.StdoutPath, child.StderrPath)}
+	entry := &forkChild{attribution: actor, seedUID: seed.attribution.UID, stopLogs: m.tailLogs(actor, child.StdoutPath, child.StderrPath), ended: make(chan struct{})}
 	m.mu.Lock()
 	m.children[actor.UID] = entry
 	m.mu.Unlock()
@@ -437,9 +447,25 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 	// is torn down by its own watcher and reported once the RPC returns.
 	go m.watchChild(entry)
 
-	if err := m.host.Probe(ctx, actor.UID, req.GetSpec().GetContainers()); err != nil {
+	// A child that ends while the probe polls fails the start at once, rather
+	// than at the probe's deadline.
+	probeCtx, stopProbe := context.WithCancelCause(ctx)
+	defer stopProbe(nil)
+	go func() {
+		select {
+		case <-entry.ended:
+			stopProbe(errChildEnded)
+		case <-probeCtx.Done():
+		}
+	}()
+	if err := m.host.Probe(probeCtx, actor.UID, req.GetSpec().GetContainers()); err != nil {
+		if errors.Is(context.Cause(probeCtx), errChildEnded) {
+			err = apierror.FailedPrecondition("the forked sandbox ended before its wakeup probe passed: %s", entry.exit.Reason)
+		} else {
+			err = fmt.Errorf("while waiting for the wakeup probe: %w", err)
+		}
 		m.dropChild(ctx, actor.UID)
-		return fmt.Errorf("while waiting for the wakeup probe: %w", err)
+		return err
 	}
 	if err := m.host.Activate(actor); err != nil {
 		m.dropChild(ctx, actor.UID)
@@ -447,6 +473,8 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 	}
 	return nil
 }
+
+var errChildEnded = errors.New("the forked sandbox ended")
 
 // cpuMax is cpu.max for millicores, over a 100 ms period. Zero is no limit.
 func cpuMax(millicores int64) string {
@@ -484,6 +512,9 @@ func (m *forkManager) watchChild(c *forkChild) {
 		// forkd is still there, or its exit is about to be seen.
 		time.Sleep(m.waitRetry)
 	}
+	// Before the lock: a fork that holds it is polling the probe and stops at this.
+	c.exit = exit
+	close(c.ended)
 
 	unlock, ok := m.lockActor(context.Background(), uid)
 	if !ok {
@@ -633,6 +664,17 @@ type execForkdLauncher struct {
 	uid          int
 }
 
+// args are the flags forkd starts with. forkd takes the cgroup parent as an
+// absolute path below /sys/fs/cgroup.
+func (l execForkdLauncher) args() []string {
+	return []string{
+		"--forkd-state-dir=" + l.stateDir,
+		"--forkd-cgroup-parent=" + l.cgroupParent,
+		"--forkd-env-prefixes=ATE_ACTOR_",
+		fmt.Sprintf("--forkd-allow-uids=%d", l.uid),
+	}
+}
+
 func (l execForkdLauncher) Launch(ctx context.Context, binary string) (*forkd.Client, <-chan struct{}, error) {
 	if _, err := os.Stat(binary); err != nil {
 		return nil, nil, fmt.Errorf("the SandboxConfig has no forkd: %w", err)
@@ -648,12 +690,7 @@ func (l execForkdLauncher) Launch(ctx context.Context, binary string) (*forkd.Cl
 			slog.WarnContext(ctx, "could not delegate a cgroup controller to forkd", slog.String("controller", c), slog.Any("err", err))
 		}
 	}
-	cmd := exec.Command(binary,
-		"--forkd-state-dir="+l.stateDir,
-		"--forkd-cgroup-parent="+strings.TrimPrefix(l.cgroupParent, "/sys/fs/cgroup"),
-		"--forkd-env-prefixes=ATE_ACTOR_",
-		fmt.Sprintf("--forkd-allow-uids=%d", l.uid),
-	)
+	cmd := exec.Command(binary, l.args()...)
 	cmd.Env = []string{}
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
