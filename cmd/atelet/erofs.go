@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"go.ate.dev/substrate/cmd/atelet/internal/ateletpath"
@@ -50,6 +51,24 @@ const (
 	// it makes the build reproducible: the same layers give the same bytes.
 	erofsUUID = "00000000-0000-0000-0000-000000000001"
 )
+
+// mkfsErofsPath is the mkfs.erofs to build seed images with: the flag's value,
+// or the binary that hack/build-mkfs-erofs.sh put into the image's kodata for
+// this architecture. Empty when there is neither.
+func mkfsErofsPath(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	dir := os.Getenv("KO_DATA_PATH")
+	if dir == "" {
+		return ""
+	}
+	path := filepath.Join(dir, "mkfs.erofs-"+runtime.GOARCH)
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
 
 // erofsBuilder writes the merged filesystem of img as an EROFS image at out.
 type erofsBuilder interface {

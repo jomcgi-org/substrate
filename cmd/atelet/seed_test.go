@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -459,6 +460,28 @@ func TestDropSeed(t *testing.T) {
 	noWorker := &ateletpb.DropSeedRequest{Atespace: seedAtespace, ActorName: "seed-1", ActorUid: seedUID}
 	if _, err := f.s.DropSeed(t.Context(), noWorker); err != nil {
 		t.Errorf("DropSeed() without a worker = %v", err)
+	}
+}
+
+func TestMkfsErofsPath(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("KO_DATA_PATH", data)
+	if got := mkfsErofsPath(""); got != "" {
+		t.Errorf("mkfsErofsPath() with no binary in kodata = %q, want none", got)
+	}
+	bundled := filepath.Join(data, "mkfs.erofs-"+runtime.GOARCH)
+	if err := os.WriteFile(bundled, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := mkfsErofsPath(""); got != bundled {
+		t.Errorf("mkfsErofsPath() = %q, want the kodata binary %q", got, bundled)
+	}
+	if got := mkfsErofsPath("/opt/mkfs.erofs"); got != "/opt/mkfs.erofs" {
+		t.Errorf("mkfsErofsPath(flag) = %q, want the flag", got)
+	}
+	t.Setenv("KO_DATA_PATH", "")
+	if got := mkfsErofsPath(""); got != "" {
+		t.Errorf("mkfsErofsPath() outside a ko image = %q, want none", got)
 	}
 }
 

@@ -71,3 +71,6 @@ Thumbs.db
 /cmd/benchmarking/isolate/fake-atelet/fake-atelet
 /cmd/benchmarking/isolate/fake-workersync/fake-workersync
 /demos/claude-code-multiplex/ui/ui-server
+
+# mkfs.erofs that hack/build-mkfs-erofs.sh builds into the atelet image
+/cmd/atelet/kodata/mkfs.erofs-*

@@ -101,6 +101,10 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: .github/scripts/release/refuse-published-release.sh
+    # ko copies cmd/atelet/kodata into the atelet image: the static mkfs.erofs
+    # that atelet builds the root filesystem image of a seed with.
+    - name: Build mkfs.erofs for the atelet image
+      run: .github/scripts/release/build-mkfs-erofs.sh
     # Builds nothing if every image already exists for the tag, unless overwrite
     # is set, and after pushing checks that every tag names the pushed image on
     # every platform.
@@ -146,6 +150,10 @@ jobs:
         buildkitd-config-inline: |
           [registry."localhost:5000"]
             http = true
+    # ko copies cmd/atelet/kodata into the atelet image: the static mkfs.erofs
+    # that atelet builds the root filesystem image of a seed with.
+    - name: Build mkfs.erofs for the atelet image
+      run: .github/scripts/release/build-mkfs-erofs.sh
     - name: Publish images
       run: go run ./cmd/ate-setup publish release-images
   charts:
