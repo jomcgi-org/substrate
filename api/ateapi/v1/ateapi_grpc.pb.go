@@ -1845,6 +1845,7 @@ const (
 	WorkerService_RequestActorSuspend_FullMethodName        = "/substrate.ateapi.v1.WorkerService/RequestActorSuspend"
 	WorkerService_ReportActorSnapshotState_FullMethodName   = "/substrate.ateapi.v1.WorkerService/ReportActorSnapshotState"
 	WorkerService_ReportActorCrashed_FullMethodName         = "/substrate.ateapi.v1.WorkerService/ReportActorCrashed"
+	WorkerService_ReportActorExited_FullMethodName          = "/substrate.ateapi.v1.WorkerService/ReportActorExited"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -1955,6 +1956,15 @@ type WorkerServiceClient interface {
 	// fails on its own if the sandbox is gone. Authorized like
 	// RequestActorSuspend.
 	ReportActorCrashed(ctx context.Context, in *ReportActorCrashedRequest, opts ...grpc.CallOption) (*ReportActorCrashedResponse, error)
+	// ReportActorExited tells the control plane that the workload of a forked
+	// Actor the calling Worker hosts has exited. The control plane records the
+	// exit and deletes the Actor, since a forked actor runs once.
+	//
+	// A RUNNING Actor with the fork role is deleted. An Actor in any other state,
+	// or without the fork role, is left alone and the report is refused as
+	// FAILED_PRECONDITION. Repeating a report that landed gets NOT_FOUND once the
+	// Actor is gone. Authorized like ReportActorCrashed.
+	ReportActorExited(ctx context.Context, in *ReportActorExitedRequest, opts ...grpc.CallOption) (*ReportActorExitedResponse, error)
 }
 
 type workerServiceClient struct {
@@ -2039,6 +2049,16 @@ func (c *workerServiceClient) ReportActorCrashed(ctx context.Context, in *Report
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReportActorCrashedResponse)
 	err := c.cc.Invoke(ctx, WorkerService_ReportActorCrashed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerServiceClient) ReportActorExited(ctx context.Context, in *ReportActorExitedRequest, opts ...grpc.CallOption) (*ReportActorExitedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportActorExitedResponse)
+	err := c.cc.Invoke(ctx, WorkerService_ReportActorExited_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2153,6 +2173,15 @@ type WorkerServiceServer interface {
 	// fails on its own if the sandbox is gone. Authorized like
 	// RequestActorSuspend.
 	ReportActorCrashed(context.Context, *ReportActorCrashedRequest) (*ReportActorCrashedResponse, error)
+	// ReportActorExited tells the control plane that the workload of a forked
+	// Actor the calling Worker hosts has exited. The control plane records the
+	// exit and deletes the Actor, since a forked actor runs once.
+	//
+	// A RUNNING Actor with the fork role is deleted. An Actor in any other state,
+	// or without the fork role, is left alone and the report is refused as
+	// FAILED_PRECONDITION. Repeating a report that landed gets NOT_FOUND once the
+	// Actor is gone. Authorized like ReportActorCrashed.
+	ReportActorExited(context.Context, *ReportActorExitedRequest) (*ReportActorExitedResponse, error)
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -2186,6 +2215,9 @@ func (UnimplementedWorkerServiceServer) ReportActorSnapshotState(context.Context
 }
 func (UnimplementedWorkerServiceServer) ReportActorCrashed(context.Context, *ReportActorCrashedRequest) (*ReportActorCrashedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportActorCrashed not implemented")
+}
+func (UnimplementedWorkerServiceServer) ReportActorExited(context.Context, *ReportActorExitedRequest) (*ReportActorExitedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportActorExited not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -2352,6 +2384,24 @@ func _WorkerService_ReportActorCrashed_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerService_ReportActorExited_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportActorExitedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).ReportActorExited(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_ReportActorExited_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).ReportActorExited(ctx, req.(*ReportActorExitedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2390,6 +2440,10 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportActorCrashed",
 			Handler:    _WorkerService_ReportActorCrashed_Handler,
+		},
+		{
+			MethodName: "ReportActorExited",
+			Handler:    _WorkerService_ReportActorExited_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

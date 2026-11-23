@@ -40,6 +40,7 @@ const (
 	WorkerSupport_RequestActorSuspend_FullMethodName      = "/atelet.WorkerSupport/RequestActorSuspend"
 	WorkerSupport_GetActorEgressPolicy_FullMethodName     = "/atelet.WorkerSupport/GetActorEgressPolicy"
 	WorkerSupport_ReportActorCrashed_FullMethodName       = "/atelet.WorkerSupport/ReportActorCrashed"
+	WorkerSupport_ReportActorExited_FullMethodName        = "/atelet.WorkerSupport/ReportActorExited"
 )
 
 // WorkerSupportClient is the client API for WorkerSupport service.
@@ -88,6 +89,10 @@ type WorkerSupportClient interface {
 	// hosts died on its own, for atelet to forward to the control plane's
 	// WorkerService, which this mirrors.
 	ReportActorCrashed(ctx context.Context, in *ReportActorCrashedRequest, opts ...grpc.CallOption) (*ReportActorCrashedResponse, error)
+	// ReportActorExited reports that the workload of the forked actor this
+	// worker hosts has exited, for atelet to forward to the control plane's
+	// WorkerService, which this mirrors. The control plane deletes the actor.
+	ReportActorExited(ctx context.Context, in *ReportActorExitedRequest, opts ...grpc.CallOption) (*ReportActorExitedResponse, error)
 }
 
 type workerSupportClient struct {
@@ -168,6 +173,16 @@ func (c *workerSupportClient) ReportActorCrashed(ctx context.Context, in *Report
 	return out, nil
 }
 
+func (c *workerSupportClient) ReportActorExited(ctx context.Context, in *ReportActorExitedRequest, opts ...grpc.CallOption) (*ReportActorExitedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportActorExitedResponse)
+	err := c.cc.Invoke(ctx, WorkerSupport_ReportActorExited_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerSupportServer is the server API for WorkerSupport service.
 // All implementations must embed UnimplementedWorkerSupportServer
 // for forward compatibility.
@@ -214,6 +229,10 @@ type WorkerSupportServer interface {
 	// hosts died on its own, for atelet to forward to the control plane's
 	// WorkerService, which this mirrors.
 	ReportActorCrashed(context.Context, *ReportActorCrashedRequest) (*ReportActorCrashedResponse, error)
+	// ReportActorExited reports that the workload of the forked actor this
+	// worker hosts has exited, for atelet to forward to the control plane's
+	// WorkerService, which this mirrors. The control plane deletes the actor.
+	ReportActorExited(context.Context, *ReportActorExitedRequest) (*ReportActorExitedResponse, error)
 	mustEmbedUnimplementedWorkerSupportServer()
 }
 
@@ -244,6 +263,9 @@ func (UnimplementedWorkerSupportServer) GetActorEgressPolicy(context.Context, *G
 }
 func (UnimplementedWorkerSupportServer) ReportActorCrashed(context.Context, *ReportActorCrashedRequest) (*ReportActorCrashedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportActorCrashed not implemented")
+}
+func (UnimplementedWorkerSupportServer) ReportActorExited(context.Context, *ReportActorExitedRequest) (*ReportActorExitedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportActorExited not implemented")
 }
 func (UnimplementedWorkerSupportServer) mustEmbedUnimplementedWorkerSupportServer() {}
 func (UnimplementedWorkerSupportServer) testEmbeddedByValue()                       {}
@@ -392,6 +414,24 @@ func _WorkerSupport_ReportActorCrashed_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerSupport_ReportActorExited_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportActorExitedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerSupportServer).ReportActorExited(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerSupport_ReportActorExited_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerSupportServer).ReportActorExited(ctx, req.(*ReportActorExitedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkerSupport_ServiceDesc is the grpc.ServiceDesc for WorkerSupport service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -427,6 +467,10 @@ var WorkerSupport_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ReportActorCrashed",
 			Handler:    _WorkerSupport_ReportActorCrashed_Handler,
 		},
+		{
+			MethodName: "ReportActorExited",
+			Handler:    _WorkerSupport_ReportActorExited_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "internal/proto/ateletpb/atelet.proto",
@@ -439,6 +483,9 @@ const (
 	Atelet_PromoteSnapshot_FullMethodName = "/atelet.Atelet/PromoteSnapshot"
 	Atelet_DetachActor_FullMethodName     = "/atelet.Atelet/DetachActor"
 	Atelet_Terminate_FullMethodName       = "/atelet.Atelet/Terminate"
+	Atelet_Seed_FullMethodName            = "/atelet.Atelet/Seed"
+	Atelet_Fork_FullMethodName            = "/atelet.Atelet/Fork"
+	Atelet_DropSeed_FullMethodName        = "/atelet.Atelet/DropSeed"
 )
 
 // AteletClient is the client API for Atelet service.
@@ -502,6 +549,18 @@ type AteletClient interface {
 	// Terminate tells atelet to terminate/kill any running workload for an actor,
 	// unmount its volumes, and clean up actor state on the node.
 	Terminate(ctx context.Context, in *TerminateRequest, opts ...grpc.CallOption) (*TerminateResponse, error)
+	// Seed builds the seed sandbox of an ActorTemplate on a worker. atelet
+	// builds the template image's read-only root filesystem image, checks its
+	// content hash, and has the worker boot the seed from it. The seed holds no
+	// network identity and serves only Fork.
+	Seed(ctx context.Context, in *SeedRequest, opts ...grpc.CallOption) (*SeedResponse, error)
+	// Fork starts a forked actor from the seed on the worker. atelet checks that
+	// the seed belongs to the request's atespace and template before it calls the
+	// worker. Only ate-api-server calls it.
+	Fork(ctx context.Context, in *ForkRequest, opts ...grpc.CallOption) (*ForkResponse, error)
+	// DropSeed discards the seed sandbox of a seed actor and its on-node state.
+	// Idempotent: a seed that is already gone is not an error.
+	DropSeed(ctx context.Context, in *DropSeedRequest, opts ...grpc.CallOption) (*DropSeedResponse, error)
 }
 
 type ateletClient struct {
@@ -572,6 +631,36 @@ func (c *ateletClient) Terminate(ctx context.Context, in *TerminateRequest, opts
 	return out, nil
 }
 
+func (c *ateletClient) Seed(ctx context.Context, in *SeedRequest, opts ...grpc.CallOption) (*SeedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeedResponse)
+	err := c.cc.Invoke(ctx, Atelet_Seed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ateletClient) Fork(ctx context.Context, in *ForkRequest, opts ...grpc.CallOption) (*ForkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForkResponse)
+	err := c.cc.Invoke(ctx, Atelet_Fork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ateletClient) DropSeed(ctx context.Context, in *DropSeedRequest, opts ...grpc.CallOption) (*DropSeedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DropSeedResponse)
+	err := c.cc.Invoke(ctx, Atelet_DropSeed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AteletServer is the server API for Atelet service.
 // All implementations must embed UnimplementedAteletServer
 // for forward compatibility.
@@ -633,6 +722,18 @@ type AteletServer interface {
 	// Terminate tells atelet to terminate/kill any running workload for an actor,
 	// unmount its volumes, and clean up actor state on the node.
 	Terminate(context.Context, *TerminateRequest) (*TerminateResponse, error)
+	// Seed builds the seed sandbox of an ActorTemplate on a worker. atelet
+	// builds the template image's read-only root filesystem image, checks its
+	// content hash, and has the worker boot the seed from it. The seed holds no
+	// network identity and serves only Fork.
+	Seed(context.Context, *SeedRequest) (*SeedResponse, error)
+	// Fork starts a forked actor from the seed on the worker. atelet checks that
+	// the seed belongs to the request's atespace and template before it calls the
+	// worker. Only ate-api-server calls it.
+	Fork(context.Context, *ForkRequest) (*ForkResponse, error)
+	// DropSeed discards the seed sandbox of a seed actor and its on-node state.
+	// Idempotent: a seed that is already gone is not an error.
+	DropSeed(context.Context, *DropSeedRequest) (*DropSeedResponse, error)
 	mustEmbedUnimplementedAteletServer()
 }
 
@@ -660,6 +761,15 @@ func (UnimplementedAteletServer) DetachActor(context.Context, *DetachActorReques
 }
 func (UnimplementedAteletServer) Terminate(context.Context, *TerminateRequest) (*TerminateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Terminate not implemented")
+}
+func (UnimplementedAteletServer) Seed(context.Context, *SeedRequest) (*SeedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Seed not implemented")
+}
+func (UnimplementedAteletServer) Fork(context.Context, *ForkRequest) (*ForkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Fork not implemented")
+}
+func (UnimplementedAteletServer) DropSeed(context.Context, *DropSeedRequest) (*DropSeedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DropSeed not implemented")
 }
 func (UnimplementedAteletServer) mustEmbedUnimplementedAteletServer() {}
 func (UnimplementedAteletServer) testEmbeddedByValue()                {}
@@ -790,6 +900,60 @@ func _Atelet_Terminate_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Atelet_Seed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AteletServer).Seed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Atelet_Seed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AteletServer).Seed(ctx, req.(*SeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Atelet_Fork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AteletServer).Fork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Atelet_Fork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AteletServer).Fork(ctx, req.(*ForkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Atelet_DropSeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DropSeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AteletServer).DropSeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Atelet_DropSeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AteletServer).DropSeed(ctx, req.(*DropSeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Atelet_ServiceDesc is the grpc.ServiceDesc for Atelet service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -820,6 +984,18 @@ var Atelet_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Terminate",
 			Handler:    _Atelet_Terminate_Handler,
+		},
+		{
+			MethodName: "Seed",
+			Handler:    _Atelet_Seed_Handler,
+		},
+		{
+			MethodName: "Fork",
+			Handler:    _Atelet_Fork_Handler,
+		},
+		{
+			MethodName: "DropSeed",
+			Handler:    _Atelet_DropSeed_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

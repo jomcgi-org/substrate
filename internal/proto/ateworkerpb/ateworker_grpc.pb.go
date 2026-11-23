@@ -39,6 +39,9 @@ const (
 	Worker_GetWorkloadStats_FullMethodName       = "/ateworker.Worker/GetWorkloadStats"
 	Worker_GetActiveWorkloadStats_FullMethodName = "/ateworker.Worker/GetActiveWorkloadStats"
 	Worker_TerminateWorkload_FullMethodName      = "/ateworker.Worker/TerminateWorkload"
+	Worker_SeedWorkload_FullMethodName           = "/ateworker.Worker/SeedWorkload"
+	Worker_ForkWorkload_FullMethodName           = "/ateworker.Worker/ForkWorkload"
+	Worker_DropSeed_FullMethodName               = "/ateworker.Worker/DropSeed"
 )
 
 // WorkerClient is the client API for Worker service.
@@ -125,6 +128,20 @@ type WorkerClient interface {
 	// TerminateWorkload stops and deletes container workloads and cleans up
 	// network and bundle overlays on the worker.
 	TerminateWorkload(ctx context.Context, in *TerminateWorkloadRequest, opts ...grpc.CallOption) (*TerminateWorkloadResponse, error)
+	// SeedWorkload boots the seed sandbox of an ActorTemplate from a root
+	// filesystem image atelet built. The seed holds no network and serves only
+	// ForkWorkload. Only a worker with the KVM platform serves it; any other gets
+	// FAILED_PRECONDITION.
+	SeedWorkload(ctx context.Context, in *SeedWorkloadRequest, opts ...grpc.CallOption) (*SeedWorkloadResponse, error)
+	// ForkWorkload starts a forked actor from a seed. It returns once the actor
+	// passes its wakeup probe and is reachable through ingress. The worker
+	// reports the actor's exit to the control plane through atelet. The actor
+	// runs under the limits of the request, and the worker terminates it at its
+	// deadline or when it exceeds its log limit.
+	ForkWorkload(ctx context.Context, in *ForkWorkloadRequest, opts ...grpc.CallOption) (*ForkWorkloadResponse, error)
+	// DropSeed discards a seed sandbox and the forked actors started from it.
+	// Idempotent: a seed that is already gone is not an error.
+	DropSeed(ctx context.Context, in *DropSeedRequest, opts ...grpc.CallOption) (*DropSeedResponse, error)
 }
 
 type workerClient struct {
@@ -189,6 +206,36 @@ func (c *workerClient) TerminateWorkload(ctx context.Context, in *TerminateWorkl
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TerminateWorkloadResponse)
 	err := c.cc.Invoke(ctx, Worker_TerminateWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) SeedWorkload(ctx context.Context, in *SeedWorkloadRequest, opts ...grpc.CallOption) (*SeedWorkloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeedWorkloadResponse)
+	err := c.cc.Invoke(ctx, Worker_SeedWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) ForkWorkload(ctx context.Context, in *ForkWorkloadRequest, opts ...grpc.CallOption) (*ForkWorkloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForkWorkloadResponse)
+	err := c.cc.Invoke(ctx, Worker_ForkWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workerClient) DropSeed(ctx context.Context, in *DropSeedRequest, opts ...grpc.CallOption) (*DropSeedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DropSeedResponse)
+	err := c.cc.Invoke(ctx, Worker_DropSeed_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -279,6 +326,20 @@ type WorkerServer interface {
 	// TerminateWorkload stops and deletes container workloads and cleans up
 	// network and bundle overlays on the worker.
 	TerminateWorkload(context.Context, *TerminateWorkloadRequest) (*TerminateWorkloadResponse, error)
+	// SeedWorkload boots the seed sandbox of an ActorTemplate from a root
+	// filesystem image atelet built. The seed holds no network and serves only
+	// ForkWorkload. Only a worker with the KVM platform serves it; any other gets
+	// FAILED_PRECONDITION.
+	SeedWorkload(context.Context, *SeedWorkloadRequest) (*SeedWorkloadResponse, error)
+	// ForkWorkload starts a forked actor from a seed. It returns once the actor
+	// passes its wakeup probe and is reachable through ingress. The worker
+	// reports the actor's exit to the control plane through atelet. The actor
+	// runs under the limits of the request, and the worker terminates it at its
+	// deadline or when it exceeds its log limit.
+	ForkWorkload(context.Context, *ForkWorkloadRequest) (*ForkWorkloadResponse, error)
+	// DropSeed discards a seed sandbox and the forked actors started from it.
+	// Idempotent: a seed that is already gone is not an error.
+	DropSeed(context.Context, *DropSeedRequest) (*DropSeedResponse, error)
 	mustEmbedUnimplementedWorkerServer()
 }
 
@@ -306,6 +367,15 @@ func (UnimplementedWorkerServer) GetActiveWorkloadStats(context.Context, *GetAct
 }
 func (UnimplementedWorkerServer) TerminateWorkload(context.Context, *TerminateWorkloadRequest) (*TerminateWorkloadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TerminateWorkload not implemented")
+}
+func (UnimplementedWorkerServer) SeedWorkload(context.Context, *SeedWorkloadRequest) (*SeedWorkloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SeedWorkload not implemented")
+}
+func (UnimplementedWorkerServer) ForkWorkload(context.Context, *ForkWorkloadRequest) (*ForkWorkloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForkWorkload not implemented")
+}
+func (UnimplementedWorkerServer) DropSeed(context.Context, *DropSeedRequest) (*DropSeedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DropSeed not implemented")
 }
 func (UnimplementedWorkerServer) mustEmbedUnimplementedWorkerServer() {}
 func (UnimplementedWorkerServer) testEmbeddedByValue()                {}
@@ -436,6 +506,60 @@ func _Worker_TerminateWorkload_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_SeedWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeedWorkloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).SeedWorkload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_SeedWorkload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).SeedWorkload(ctx, req.(*SeedWorkloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_ForkWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForkWorkloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).ForkWorkload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_ForkWorkload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).ForkWorkload(ctx, req.(*ForkWorkloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Worker_DropSeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DropSeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).DropSeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Worker_DropSeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).DropSeed(ctx, req.(*DropSeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Worker_ServiceDesc is the grpc.ServiceDesc for Worker service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -466,6 +590,18 @@ var Worker_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TerminateWorkload",
 			Handler:    _Worker_TerminateWorkload_Handler,
+		},
+		{
+			MethodName: "SeedWorkload",
+			Handler:    _Worker_SeedWorkload_Handler,
+		},
+		{
+			MethodName: "ForkWorkload",
+			Handler:    _Worker_ForkWorkload_Handler,
+		},
+		{
+			MethodName: "DropSeed",
+			Handler:    _Worker_DropSeed_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
