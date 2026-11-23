@@ -216,9 +216,12 @@ type realHost struct {
 	unhosted int
 	// probe replaces the HTTP wakeup probe when set.
 	probe func(ctx context.Context, uid string) error
+	// hostMS are the times Host took, in milliseconds.
+	hostMS []float64
 }
 
 func (h *realHost) Host(ctx context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64) (string, error) {
+	start := time.Now()
 	session, err := actornet.ServeSandbox(ctx, actornet.SandboxNetworkConfig{ActorUID: actor.UID, Veth: true, EgressPort: 15001}, nil, nil)
 	if err != nil {
 		return "", err
@@ -226,6 +229,7 @@ func (h *realHost) Host(ctx context.Context, actor resources.ActorAttribution, _
 	h.mu.Lock()
 	h.sessions[actor.UID] = session
 	h.hosted++
+	h.hostMS = append(h.hostMS, float64(time.Since(start).Microseconds())/1000)
 	h.mu.Unlock()
 	return fmt.Sprintf("/proc/%d/fd/%d", os.Getpid(), int(session.Network.RuntimeNetNS)), nil
 }
@@ -976,6 +980,9 @@ func TestRealForkdEngine(t *testing.T) {
 	for _, n := range []int{1, 4, 16} {
 		var forkMS, resultMS []float64
 		var failed int
+		f.host.mu.Lock()
+		f.host.hostMS = nil
+		f.host.mu.Unlock()
 		for rep := 0; rep < reps; rep++ {
 			var wg sync.WaitGroup
 			var mu sync.Mutex
@@ -1017,8 +1024,12 @@ func TestRealForkdEngine(t *testing.T) {
 		sort.Float64s(forkMS)
 		sort.Float64s(resultMS)
 		if len(forkMS) > 0 {
-			t.Logf("FULLPATH n=%d children=%d failed=%d manager_fork_ms_med=%.1f p95=%.1f fork_to_result_ms_med=%.1f p95=%.1f",
-				n, len(forkMS), failed, forkMS[len(forkMS)/2], forkMS[len(forkMS)*95/100], resultMS[len(resultMS)/2], resultMS[len(resultMS)*95/100])
+			f.host.mu.Lock()
+			hostMS := append([]float64(nil), f.host.hostMS...)
+			f.host.mu.Unlock()
+			sort.Float64s(hostMS)
+			t.Logf("FULLPATH n=%d children=%d failed=%d host_ms_med=%.1f manager_fork_ms_med=%.1f p95=%.1f fork_to_result_ms_med=%.1f p95=%.1f",
+				n, len(forkMS), failed, hostMS[len(hostMS)/2], forkMS[len(forkMS)/2], forkMS[len(forkMS)*95/100], resultMS[len(resultMS)/2], resultMS[len(resultMS)*95/100])
 		}
 	}
 }
