@@ -405,6 +405,7 @@ func TestDebugRedactFieldsArePinned(t *testing.T) {
 		"substrate.ateapi.v1.MintWorkerActorJwtResponse.actor_jwt":   true,
 		"atelet.EnvVar.value":                                        true,
 		"ateworker.ContainerSpec.env":                                true,
+		"ateworker.ForkWorkloadRequest.env":                          true,
 		"substrate.credprovider.v1.FetchSecretResponse.opaque_bytes": true,
 		"substrate.objectstore.v1.FetchAssetRequest.asset_uri":       true,
 		"substrate.objectstore.v1.FetchSnapshotRequest.actor_jwt":    true,
