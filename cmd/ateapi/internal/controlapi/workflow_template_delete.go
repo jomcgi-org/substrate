@@ -45,6 +45,12 @@ func (w *ActorWorkflow) DeleteActorTemplate(ctx context.Context, templateRef res
 		return nil, err
 	}
 
+	if tmpl.GetForkConfig() != nil {
+		if err := w.ensureSeedsDeleted(ctx, tmpl); err != nil {
+			return nil, err
+		}
+	}
+
 	// Both are named after the template's UID, in the template's atespace.
 	goldenName := tmpl.GetMetadata().GetUid()
 	if err := w.ensureGoldenActorDeleted(ctx, resources.ActorRef{Atespace: templateRef.Atespace, Name: goldenName}); err != nil {
@@ -145,4 +151,30 @@ func (w *ActorWorkflow) finalizeTemplateDeleted(ctx context.Context, tmpl *ateap
 		return nil, fmt.Errorf("while deleting actor template from DB: %w", err)
 	}
 	return deleted, nil
+}
+
+// ensureSeedsDeleted removes the seed of the template on every worker. A seed
+// is named after the template and the worker, so no listing is needed. A seed
+// on a worker that no longer exists was released when the worker went.
+func (w *ActorWorkflow) ensureSeedsDeleted(ctx context.Context, tmpl *ateapi.ActorTemplate) (err error) {
+	ctx, done := stepSpan(ctx, "DeleteSeeds")
+	defer func() { err = done(err) }()
+
+	ctx = withSystemPrincipal(ctx)
+	for token := ""; ; {
+		page, err := w.store.ListWorkers(ctx, store.ListOptions{PageToken: token})
+		if err != nil {
+			return fmt.Errorf("while listing workers: %w", err)
+		}
+		for _, worker := range page.Items {
+			ref := resources.ActorRef{Atespace: tmpl.GetMetadata().GetAtespace(), Name: seedActorName(tmpl.GetMetadata().GetUid(), worker.GetMetadata().GetName())}
+			if _, err := w.DeleteActor(ctx, ref, store.DeletePreconditions{}); err != nil && apierror.Code(err) != codes.NotFound {
+				return fmt.Errorf("while deleting seed %s: %w", ref, err)
+			}
+		}
+		if page.NextPageToken == "" {
+			return nil
+		}
+		token = page.NextPageToken
+	}
 }

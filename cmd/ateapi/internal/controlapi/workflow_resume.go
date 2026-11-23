@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -154,6 +155,9 @@ func (w *ActorWorkflow) loadActorForResume(ctx context.Context, actorRef resourc
 
 	actorTemplate, err := resolveActorTemplate(ctx, w.store, actor)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := checkForkResumable(ctx, actor, actorTemplate); err != nil {
 		return nil, nil, err
 	}
 	return actor, actorTemplate, nil
@@ -582,7 +586,7 @@ func schedulingConstraints(actor *ateapi.Actor, tmpl *ateapi.ActorTemplate) sche
 	if sel := tmpl.GetWorkerSelector(); sel != nil {
 		c.TemplateSelector = labels.SelectorFromSet(labels.Set(sel.GetMatchLabels()))
 	}
-	return c
+	return forkSchedulingConstraints(c, actor, tmpl)
 }
 
 // snapshotToResume returns the snapshot ResumeActor restores from: the latest
@@ -715,6 +719,14 @@ func (w *ActorWorkflow) ensureAteletRestored(ctx context.Context, actorRef resou
 	// A re-entered resume skips assignWorkerAttempt, which checks this too.
 	if err := checkSnapshotUpload(actorRef, actor); err != nil {
 		return tele, 0, err
+	}
+
+	// A seed and a forked actor start without a snapshot, from the seed.
+	switch forkRole(actor) {
+	case ateapi.ForkRole_FORK_ROLE_SEED:
+		return w.ensureAteletSeeded(ctx, actorRef, actor, actorTemplate)
+	case ateapi.ForkRole_FORK_ROLE_FORK:
+		return w.ensureAteletForked(ctx, actorRef, actor, actorTemplate)
 	}
 
 	assignment := actor.GetStatus().GetWorkerAssignment()
@@ -884,6 +896,9 @@ func (w *ActorWorkflow) finalizeRunning(ctx context.Context, actorRef resources.
 		toUpdate.Status.State = ateapi.ActorState_ACTOR_STATE_RUNNING
 		toUpdate.Status.WorkerAssignment.WorkerEpoch = workerEpoch
 		toUpdate.Status.WorkerAssignment.WorkerPodIps = slices.Clone(worker.GetStatus().GetIps())
+		if isForkActor(toUpdate) {
+			toUpdate.Status.Fork.StartTime = timestamppb.Now()
+		}
 		// The workload already runs, so a record that can't take the upload
 		// doesn't hold the actor in RESUMING. The next suspend prunes the entry.
 		if err := recordRestoredUpload(ctx, toUpdate.Status); err != nil {
@@ -899,6 +914,7 @@ func (w *ActorWorkflow) finalizeRunning(ctx context.Context, actorRef resources.
 		return nil, err
 	}
 	logActorStateChanged(ctx, storedActor, ateattr.OperationResume)
+	w.afterRunning(ctx, storedActor, workerEpoch)
 	return storedActor, nil
 }
 

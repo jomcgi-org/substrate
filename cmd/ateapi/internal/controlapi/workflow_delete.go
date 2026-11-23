@@ -60,6 +60,13 @@ func (w *ActorWorkflow) DeleteActor(ctx context.Context, actorRef resources.Acto
 		errs = append(errs, fmt.Errorf("while fetching actor template: %w", err))
 	}
 
+	// A seed stops taking forked actors before its sandbox goes away.
+	if isSeedActor(actor) {
+		if err := removeSeed(ctx, w.store, actor.GetStatus().GetFork().GetPinnedWorker().GetName(), actor.GetMetadata().GetUid()); err != nil {
+			errs = append(errs, fmt.Errorf("while unlisting the seed: %w", err))
+		}
+	}
+
 	var atletTerminatedErr, volumesDetachedErr error
 	if err := w.ensureAteletTerminated(ctx, actorRef, actor, actorTemplate, ateattr.OperationDelete); err != nil {
 		atletTerminatedErr = fmt.Errorf("while terminating atelet: %w", err)
@@ -146,6 +153,21 @@ func (w *ActorWorkflow) ensureAteletTerminated(ctx context.Context, actorRef res
 			slog.String("templateAtespace", actor.GetActorTemplate().GetAtespace()),
 			slog.String("templateName", actor.GetActorTemplate().GetName()))
 		workloadSpec = fallbackWorkloadSpec(actor)
+	}
+
+	if isSeedActor(actor) {
+		// A seed has no workload to terminate: atelet drops the sandbox and the
+		// image it was built from.
+		_, err := client.DropSeed(ctx, &ateletpb.DropSeedRequest{
+			WorkerPodUid: workerPodUID,
+			Atespace:     actor.GetMetadata().GetAtespace(),
+			ActorName:    actor.GetMetadata().GetName(),
+			ActorUid:     actor.GetMetadata().GetUid(),
+		})
+		if err != nil && status.Code(err) != codes.NotFound {
+			return handleAteletError(ctx, w.store, actorRef, opName, "DropSeed", true, err)
+		}
+		return nil
 	}
 
 	req := &ateletpb.TerminateRequest{
@@ -255,6 +277,9 @@ func (w *ActorWorkflow) ensureMarkedDeleting(ctx context.Context, actorRef resou
 
 	var alreadyDeleting *ateapi.Actor
 	storedActor, err := w.store.MarkActorForDeletion(ctx, actorRef, precondition, func(toUpdate *ateapi.Actor) error {
+		if err := refuseSeedUserOp(ctx, toUpdate, "delete"); err != nil {
+			return err
+		}
 		if toUpdate.GetMetadata().GetDeleteTime() != nil {
 			alreadyDeleting = toUpdate
 			return errAlreadyMarked

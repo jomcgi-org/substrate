@@ -146,6 +146,9 @@ func (w *ActorWorkflow) loadActorForSuspend(ctx context.Context, actorRef resour
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := refuseForkSuspendOrRevert(actor, "suspended"); err != nil {
+		return nil, nil, err
+	}
 	actorTemplate, err := resolveActorTemplate(ctx, w.store, actor)
 	if err != nil {
 		return nil, nil, err

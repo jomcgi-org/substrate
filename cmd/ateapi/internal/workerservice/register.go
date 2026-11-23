@@ -105,6 +105,8 @@ func (s *Server) RegisterWorker(ctx context.Context, req *ateapi.RegisterWorkerR
 		// The sandbox classes were the previous worker process's. This one
 		// reports its own, and the Worker takes no Actors until it does.
 		toUpdate.Status.SandboxClasses = nil
+		// A seed lives in its worker process, so the previous process's are gone.
+		toUpdate.Status.Seeds = nil
 		toUpdate.Status.Ips = slices.Clone(req.GetIps())
 		// Replaces rather than merges: a Worker reports everything it has, so a
 		// dimension this report leaves out is one it no longer supplies.

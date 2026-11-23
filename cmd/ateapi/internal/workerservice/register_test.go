@@ -24,6 +24,7 @@ import (
 
 	"go.ate.dev/substrate/api/ateapi/v1"
 	"go.ate.dev/substrate/cmd/ateapi/internal/ateletauth/ateletauthtest"
+	"go.ate.dev/substrate/cmd/ateapi/internal/store"
 	"go.ate.dev/substrate/cmd/ateapi/internal/store/storetest"
 	"go.ate.dev/substrate/internal/apierror"
 	"google.golang.org/grpc/codes"
@@ -615,5 +616,43 @@ func TestSetWorkerSandboxRuntimes_Errors(t *testing.T) {
 				t.Errorf("code = %v (err %v), want %v", got, err, tc.want)
 			}
 		})
+	}
+}
+
+// A seed lives in its worker process, so a new process starts with none.
+func TestRegisterWorker_ClearsSeeds(t *testing.T) {
+	st, cleanup := storetest.SetupTestStore(t)
+	defer cleanup()
+	seedReportedWorker(t, st, testNode, &ateapi.WorkerResources{Actors: 1})
+	worker, err := st.GetWorker(context.Background(), testWorkerName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.UpdateWorker(context.Background(), testWorkerName, store.PreconditionFrom(worker), func(w *ateapi.Worker) error {
+		w.Status.IssuedEpoch++
+		w.Status.Seeds = []*ateapi.WorkerSeed{{
+			SeedActor:    &ateapi.ObjectRef{Atespace: "team-a", Name: "seed-1"},
+			SeedActorUid: "3b9f1e77-2c4d-4a80-91be-6d5c8f0a7e21",
+			TemplateUid:  "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+			WorkerEpoch:  w.Status.RegisteredEpoch,
+		}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	worker, _ = st.GetWorker(context.Background(), testWorkerName)
+
+	s := New(st, &fakeControl{}, testAteletSPIFFEID, nil, "", nil)
+	resp, err := s.RegisterWorker(ateletauthtest.ContextWith(ateletauthtest.CertOn(t, testNode)), &ateapi.RegisterWorkerRequest{
+		Worker:   &ateapi.ObjectRef{Name: testWorkerName},
+		Epoch:    worker.GetStatus().GetIssuedEpoch(),
+		Ips:      []string{"10.0.0.9"},
+		Capacity: &ateapi.WorkerResources{Actors: 1},
+	})
+	if err != nil {
+		t.Fatalf("RegisterWorker() = %v", err)
+	}
+	if got := resp.GetWorker().GetStatus().GetSeeds(); len(got) != 0 {
+		t.Errorf("seeds after a new worker process registered = %v, want none", got)
 	}
 }

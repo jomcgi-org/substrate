@@ -124,6 +124,9 @@ func (w *ActorWorkflow) loadActorForRevert(ctx context.Context, actorRef resourc
 		}
 		return nil, nil, fmt.Errorf("while fetching actor: %w", err)
 	}
+	if err := refuseForkSuspendOrRevert(actor, "reverted"); err != nil {
+		return nil, nil, err
+	}
 
 	actorTemplate, err := resolveActorTemplate(ctx, w.store, actor)
 	if errors.Is(err, errActorTemplateNotFound) {

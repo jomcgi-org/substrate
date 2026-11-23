@@ -82,6 +82,11 @@ func (s *ServiceImpl) CreateActor(ctx context.Context, inActor *ateapi.Actor) (*
 		return nil, err
 	}
 
+	fork, err := forkForCreate(ctx, inActor, template)
+	if err != nil {
+		return nil, err
+	}
+
 	// Resolve the explicit tag, or freeze the template's current golden default.
 	tagRef := inActor.GetSourceTag()
 	if tagRef == nil {
@@ -126,6 +131,7 @@ func (s *ServiceImpl) CreateActor(ctx context.Context, inActor *ateapi.Actor) (*
 	outActor.Status = &ateapi.ActorStatus{
 		State:           ateapi.ActorState_ACTOR_STATE_SUSPENDED,
 		ExternalVolumes: externalVolumesStatus(initVols),
+		Fork:            fork,
 	}
 	if sourceTag != nil {
 		// The Actor starts out borrowing the tag's snapshot rather than
@@ -263,6 +269,9 @@ func (s *RPCService) UpdateActor(ctx context.Context, req *ateapi.UpdateActorReq
 	storedActor, err := s.impl.UpdateActor(ctx, actorRef, store.PreconditionFrom(inActor), func(toUpdate *ateapi.Actor) error {
 		if toUpdate.GetMetadata().GetDeleteTime() != nil {
 			return apierror.FailedPrecondition("Actor %s is being deleted", actorRef)
+		}
+		if err := checkForkUpdate(ctx, toUpdate, inActor); err != nil {
+			return err
 		}
 		// Status and Metadata are server-owned fields.
 		status, metadata := toUpdate.GetStatus(), toUpdate.GetMetadata()

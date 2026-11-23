@@ -52,6 +52,11 @@ func (w *ActorWorkflow) CrashActorReportedByWorker(ctx context.Context, actorRef
 	if state := actor.GetStatus().GetState(); state != ateapi.ActorState_ACTOR_STATE_RUNNING {
 		return nil, apierror.FailedPrecondition("actor %s is %s, not RUNNING", actorRef, state)
 	}
+	if isSeedActor(actor) {
+		if err := removeSeed(leaseCtx, w.store, workerName, actorUID); err != nil {
+			return nil, err
+		}
+	}
 	if err := crashActor(leaseCtx, w.store, actorRef, ateattr.OperationUnknown, message); err != nil {
 		return nil, err
 	}
