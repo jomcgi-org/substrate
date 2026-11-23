@@ -49,6 +49,26 @@ func ValidateRunRequest(ctx context.Context, req *ateletpb.RunRequest) field.Err
 	return Validate_RunRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)
 }
 
+// ValidateSeedRequest runs the generated validation for req.
+func ValidateSeedRequest(ctx context.Context, req *ateletpb.SeedRequest) field.ErrorList {
+	return Validate_SeedRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)
+}
+
+// ValidateForkRequest runs the generated validation for req.
+func ValidateForkRequest(ctx context.Context, req *ateletpb.ForkRequest) field.ErrorList {
+	return Validate_ForkRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)
+}
+
+// ValidateDropSeedRequest runs the generated validation for req.
+func ValidateDropSeedRequest(ctx context.Context, req *ateletpb.DropSeedRequest) field.ErrorList {
+	return Validate_DropSeedRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)
+}
+
+// ValidateReportActorExitedRequest runs the generated validation for req.
+func ValidateReportActorExitedRequest(ctx context.Context, req *ateletpb.ReportActorExitedRequest) field.ErrorList {
+	return Validate_ReportActorExitedRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)
+}
+
 // ValidateTerminateRequest runs the generated validation for req.
 func ValidateTerminateRequest(ctx context.Context, req *ateletpb.TerminateRequest) field.ErrorList {
 	return Validate_TerminateRequest(ctx, operation.Operation{Type: operation.Create}, nil, req, nil)

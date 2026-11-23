@@ -224,6 +224,7 @@ func toAteAPISandboxRuntime(in *ateletpb.WorkerSandboxRuntime) *ateapi.WorkerSan
 	return &ateapi.WorkerSandboxRuntime{
 		Version:       toAteAPICompat(in.GetVersion()),
 		ActorOverhead: toAteAPIOverhead(in.GetActorOverhead()),
+		ForkOverhead:  toAteAPIOverhead(in.GetForkOverhead()),
 	}
 }
 
@@ -374,4 +375,35 @@ func (s *workerSupportServer) ReportActorCrashed(ctx context.Context, req *atele
 		slog.String("actor_name", req.GetActorName()),
 		slog.String("actor_uid", req.GetActorUid()))
 	return &ateletpb.ReportActorCrashedResponse{}, nil
+}
+
+// ReportActorExited forwards a worker's report that the workload of a forked
+// actor it hosts exited. The control plane deletes the actor. Authorized like
+// RequestActorSuspend.
+func (s *workerSupportServer) ReportActorExited(ctx context.Context, req *ateletpb.ReportActorExitedRequest) (*ateletpb.ReportActorExitedResponse, error) {
+	workerIdentity, err := authenticatedWorkerIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if errs := apivalidation.ValidateReportActorExitedRequest(ctx, req); len(errs) > 0 {
+		return nil, resources.ToGRPCStatusError(errs)
+	}
+	if _, err := s.workers.ReportActorExited(ctx, &ateapi.ReportActorExitedRequest{
+		Worker: &ateapi.ObjectRef{Name: workerIdentity.PodUID},
+		Actor: &ateapi.ObjectRef{
+			Atespace: req.GetActorAtespace(),
+			Name:     req.GetActorName(),
+		},
+		ActorUid: req.GetActorUid(),
+		ExitCode: req.GetExitCode(),
+	}); err != nil {
+		return nil, err
+	}
+	slog.InfoContext(ctx, "Forwarded a forked actor exit report",
+		slog.String("pod_uid", workerIdentity.PodUID),
+		slog.String("actor_atespace", req.GetActorAtespace()),
+		slog.String("actor_name", req.GetActorName()),
+		slog.String("actor_uid", req.GetActorUid()),
+		slog.Int("exit_code", int(req.GetExitCode())))
+	return &ateletpb.ReportActorExitedResponse{}, nil
 }

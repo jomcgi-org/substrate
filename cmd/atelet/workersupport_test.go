@@ -341,6 +341,18 @@ func TestSetWorkerSandboxRuntimes(t *testing.T) {
 			return want
 		}(),
 	}, {
+		name: "forwards the default runtime's fork overhead",
+		req: func() *ateletpb.SetWorkerSandboxRuntimesRequest {
+			classes := reqClasses()
+			classes[0].DefaultRuntime.ForkOverhead = &ateletpb.RuntimeOverhead{MemoryBytes: 16 << 20}
+			return &ateletpb.SetWorkerSandboxRuntimesRequest{Epoch: 3, SandboxClasses: classes}
+		}(),
+		wantForwarded: func() []*ateapi.SetWorkerSandboxRuntimesRequest {
+			want := forwarded()
+			want[0].GetSandboxClasses()[0].DefaultRuntime.ForkOverhead = &ateapi.RuntimeOverhead{MemoryBytes: 16 << 20}
+			return want
+		}(),
+	}, {
 		name:          "forwards restorable runtimes",
 		req:           &ateletpb.SetWorkerSandboxRuntimesRequest{Epoch: 3, SandboxClasses: reqClasses(reqCompat("d547"))},
 		wantForwarded: forwarded(wantCompat("d547")),
@@ -410,7 +422,16 @@ type fakeSuspendService struct {
 
 	got        []*ateapi.RequestActorSuspendRequest
 	gotCrashed []*ateapi.ReportActorCrashedRequest
+	gotExited  []*ateapi.ReportActorExitedRequest
 	err        error
+}
+
+func (s *fakeSuspendService) ReportActorExited(_ context.Context, in *ateapi.ReportActorExitedRequest, _ ...grpc.CallOption) (*ateapi.ReportActorExitedResponse, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	s.gotExited = append(s.gotExited, in)
+	return &ateapi.ReportActorExitedResponse{}, nil
 }
 
 func (s *fakeSuspendService) ReportActorCrashed(_ context.Context, in *ateapi.ReportActorCrashedRequest, _ ...grpc.CallOption) (*ateapi.ReportActorCrashedResponse, error) {
@@ -688,5 +709,58 @@ func TestReportActorCrashedRequiresACertificate(t *testing.T) {
 	}
 	if len(workers.gotCrashed) != 0 {
 		t.Errorf("unauthenticated report was still forwarded: %v", workers.gotCrashed)
+	}
+}
+
+func TestReportActorExitedNamesTheCallingWorker(t *testing.T) {
+	workers := &fakeSuspendService{}
+	svc := &workerSupportServer{workers: workers}
+
+	if _, err := svc.ReportActorExited(workerContext(t, "pod-a"), &ateletpb.ReportActorExitedRequest{
+		ActorAtespace: "team-a",
+		ActorName:     "actor-1",
+		ActorUid:      "01234567-89ab-cdef-0123-456789abcdef",
+		ExitCode:      3,
+	}); err != nil {
+		t.Fatalf("ReportActorExited() failed: %v", err)
+	}
+	want := []*ateapi.ReportActorExitedRequest{{
+		Worker:   &ateapi.ObjectRef{Name: "pod-a"},
+		Actor:    &ateapi.ObjectRef{Atespace: "team-a", Name: "actor-1"},
+		ActorUid: "01234567-89ab-cdef-0123-456789abcdef",
+		ExitCode: 3,
+	}}
+	if diff := cmp.Diff(want, workers.gotExited, protocmp.Transform()); diff != "" {
+		t.Errorf("forwarded request mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestReportActorExitedRefusals(t *testing.T) {
+	valid := func() *ateletpb.ReportActorExitedRequest {
+		return &ateletpb.ReportActorExitedRequest{ActorAtespace: "team-a", ActorName: "actor-1", ActorUid: "01234567-89ab-cdef-0123-456789abcdef"}
+	}
+	tooBig := valid()
+	tooBig.ExitCode = 256
+	tests := []struct {
+		name string
+		ctx  context.Context
+		req  *ateletpb.ReportActorExitedRequest
+		want codes.Code
+	}{
+		{"no certificate", context.Background(), valid(), codes.Unauthenticated},
+		{"exit code out of range", workerContext(t, "pod-a"), tooBig, codes.InvalidArgument},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workers := &fakeSuspendService{}
+			svc := &workerSupportServer{workers: workers}
+			_, err := svc.ReportActorExited(tt.ctx, tt.req)
+			if status.Code(err) != tt.want {
+				t.Errorf("ReportActorExited() = %v, want %v", err, tt.want)
+			}
+			if len(workers.gotExited) != 0 {
+				t.Errorf("a refused report was forwarded: %v", workers.gotExited)
+			}
+		})
 	}
 }

@@ -120,6 +120,7 @@ var (
 	imageCredentialProviderBinDir = pflag.String("image-credential-provider-bin-dir", "", "Directory holding the credential provider executables named by --image-credential-provider-config. Required when that flag is set.")
 
 	localhostRegistryReplacement = pflag.String("localhost-registry-replacement", "", "The replacement registry endpoint for localhost and/or loopback IP addresses, useful for local development. for example kind-registry:5000")
+	mkfsErofsBinary              = pflag.String("mkfs-erofs", "mkfs.erofs", "The mkfs.erofs binary that builds the root filesystem image of a seed (preview gate ForkSeed). Empty leaves Seed unavailable.")
 	imageCacheDir                = pflag.String("image-cache-dir", ateletpath.ImageCacheDir, "Directory for the node-local OCI image layer cache. Must be on the volume shared with the worker pods (the cached layers are their overlay lowerdirs), and on a disk sized for both capacity and IOPS: unpack throughput is gated by the volume's IOPS.")
 
 	showVersion  = pflag.Bool("version", false, "Print version and exit.")
@@ -452,6 +453,9 @@ func main() {
 		workerService,
 		bootID,
 	)
+	if *mkfsErofsBinary != "" {
+		wmService.erofs = mkfsErofs{binary: *mkfsErofsBinary}
+	}
 	store.s = wmService
 	snapshots.Start()
 	go systemInfoVolumes.run(ctx)
@@ -784,6 +788,9 @@ type Atelet struct {
 	// failures, so a restore that can never succeed stops being retried (see
 	// boundRetryableRestoreError).
 	restoreFailures restoreFailureCounter
+	// erofs builds the root filesystem image of a seed. Nil when atelet has no
+	// mkfs.erofs, which makes Seed fail.
+	erofs erofsBuilder
 	// bootID is the node's boot ID (see bootid.Read), recorded in the manifest
 	// of each local snapshot. A local snapshot recording another, or none,
 	// was written before the node last rebooted.

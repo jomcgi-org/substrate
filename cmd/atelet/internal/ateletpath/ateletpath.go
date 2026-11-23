@@ -113,6 +113,27 @@ func ActorSnapshotStateFile(actorUID string) string {
 	)
 }
 
+// SeedRecordFile is the per-actor file where atelet records what a seed
+// Actor was built for: its atespace, template and worker pod. Fork checks a
+// request against it. Like ActorSandboxAssetsFile it lives directly under
+// ActorPath, outside the subdirs actordirs.ResetActorDirs wipes.
+func SeedRecordFile(actorUID string) string {
+	return filepath.Join(
+		ActorPath(actorUID),
+		"seed.json",
+	)
+}
+
+// SeedRootfsDir holds the read-only root filesystem image a seed boots from,
+// as hard links from the sandbox asset cache. Not among the directories
+// actordirs.ResetActorDirs empties.
+func SeedRootfsDir(actorUID string) string {
+	return filepath.Join(
+		ActorPath(actorUID),
+		"seed-rootfs",
+	)
+}
+
 // SandboxAssetsDir holds the actor's sandbox runtime assets, one entry per
 // asset name, each a hard link (or a directory of hard links, for a gVisor
 // release) from SandboxAssetCacheDir. The worker runs binaries from here
