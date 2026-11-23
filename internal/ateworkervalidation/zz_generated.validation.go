@@ -927,6 +927,111 @@ func Validate_ContainerSpec(
 	return errs
 }
 
+// Validate_DropSeedRequest validates an instance of DropSeedRequest according
+// to declarative validation rules in the API schema.
+func Validate_DropSeedRequest(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *ateworkerpb.DropSeedRequest) (errs field.ErrorList) {
+
+	{ // field ateworkerpb.DropSeedRequest.Atespace
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.DropSeedRequest) *string {
+				return &oldObj.Atespace
+			})
+		errs = append(errs, fn(fldPath.Child("atespace"), &obj.Atespace, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.DropSeedRequest.ActorName
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.DropSeedRequest) *string {
+				return &oldObj.ActorName
+			})
+		errs = append(errs, fn(fldPath.Child("actor_name"), &obj.ActorName, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.DropSeedRequest.ActorUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.DropSeedRequest) *string {
+				return &oldObj.ActorUid
+			})
+		errs = append(errs, fn(fldPath.Child("actor_uid"), &obj.ActorUid, oldVal, oldObj != nil)...)
+	}
+
+	return errs
+}
+
 // Validate_EgressGateway validates an instance of EgressGateway according
 // to declarative validation rules in the API schema.
 func Validate_EgressGateway(
@@ -967,6 +1072,529 @@ func Validate_EgressGateway(
 				return &oldObj.Address
 			})
 		errs = append(errs, fn(fldPath.Child("address"), &obj.Address, oldVal, oldObj != nil)...)
+	}
+
+	return errs
+}
+
+// Validate_ForkWorkloadRequest validates an instance of ForkWorkloadRequest according
+// to declarative validation rules in the API schema.
+func Validate_ForkWorkloadRequest(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *ateworkerpb.ForkWorkloadRequest) (errs field.ErrorList) {
+
+	{ // field ateworkerpb.ForkWorkloadRequest.Atespace
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.Atespace
+			})
+		errs = append(errs, fn(fldPath.Child("atespace"), &obj.Atespace, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.ActorName
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.ActorName
+			})
+		errs = append(errs, fn(fldPath.Child("actor_name"), &obj.ActorName, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.ActorUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.ActorUid
+			})
+		errs = append(errs, fn(fldPath.Child("actor_uid"), &obj.ActorUid, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.ActorTemplateAtespace
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.ActorTemplateAtespace
+			})
+		errs = append(errs, fn(fldPath.Child("actor_template_atespace"), &obj.ActorTemplateAtespace, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.ActorTemplateName
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.ActorTemplateName
+			})
+		errs = append(errs, fn(fldPath.Child("actor_template_name"), &obj.ActorTemplateName, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.TemplateUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.TemplateUid
+			})
+		errs = append(errs, fn(fldPath.Child("template_uid"), &obj.TemplateUid, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.SeedActorUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *string {
+				return &oldObj.SeedActorUid
+			})
+		errs = append(errs, fn(fldPath.Child("seed_actor_uid"), &obj.SeedActorUid, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.SeedWorkerEpoch
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *int64,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.Minimum(ctx, op, fldPath, obj, oldObj, 1); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *int64 {
+				return &oldObj.SeedWorkerEpoch
+			})
+		errs = append(errs, fn(fldPath.Child("seed_worker_epoch"), &obj.SeedWorkerEpoch, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.Spec
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.WorkloadSpec,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			func() { // cohort = "containers"
+				earlyReturn := false
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual, validate.RequiredSlice).MarkShortCircuit(); len(e) != 0 {
+					errs = append(errs, e...)
+					earlyReturn = true
+				}
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []*ateworkerpb.Container) field.ErrorList {
+						return validate.MaxItems(ctx, op, fldPath, obj, oldObj, 10)
+					}).MarkShortCircuit(); len(e) != 0 {
+					earlyReturn = true
+				}
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual, validate.OptionalSlice).MarkShortCircuit(); len(e) != 0 {
+					earlyReturn = true
+				}
+				if earlyReturn {
+					return // do not proceed
+				}
+			}()
+			// call the type's validation function
+			errs = append(errs, Validate_WorkloadSpec(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *ateworkerpb.WorkloadSpec {
+				return oldObj.Spec
+			})
+		errs = append(errs, fn(fldPath.Child("spec"), obj.Spec, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.Resources
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.ResourceRequirements,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_ResourceRequirements(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *ateworkerpb.ResourceRequirements {
+				return oldObj.Resources
+			})
+		errs = append(errs, fn(fldPath.Child("resources"), obj.Resources, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.Env
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj []string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.MaxItems(ctx, op, fldPath, obj, oldObj, 8).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if e := validate.OptionalSlice(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.EachValSliceVal(ctx, op, fldPath, obj, oldObj, nil, nil,
+				func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj *string) field.ErrorList {
+					return validate.MaxLength(ctx, op, fldPath, obj, oldObj, 32768)
+				}); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) []string {
+				return oldObj.Env
+			})
+		errs = append(errs, fn(fldPath.Child("env"), obj.Env, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.PidsLimit
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *int32,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.Maximum(ctx, op, fldPath, obj, oldObj, 4096); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			if e := validate.Minimum(ctx, op, fldPath, obj, oldObj, 32); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *int32 {
+				return &oldObj.PidsLimit
+			})
+		errs = append(errs, fn(fldPath.Child("pids_limit"), &obj.PidsLimit, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.LogBytesLimit
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *int64,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.Maximum(ctx, op, fldPath, obj, oldObj, 1073741824); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			if e := validate.Minimum(ctx, op, fldPath, obj, oldObj, 1024); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *int64 {
+				return &oldObj.LogBytesLimit
+			})
+		errs = append(errs, fn(fldPath.Child("log_bytes_limit"), &obj.LogBytesLimit, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.MaxLifetimeSeconds
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *int32,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.Maximum(ctx, op, fldPath, obj, oldObj, 3600); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			if e := validate.Minimum(ctx, op, fldPath, obj, oldObj, 1); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *int32 {
+				return &oldObj.MaxLifetimeSeconds
+			})
+		errs = append(errs, fn(fldPath.Child("max_lifetime_seconds"), &obj.MaxLifetimeSeconds, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.ForkWorkloadRequest.ActorDirs
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.ActorDirs,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_ActorDirs(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *ateworkerpb.ActorDirs {
+				return oldObj.ActorDirs
+			})
+		errs = append(errs, fn(fldPath.Child("actor_dirs"), obj.ActorDirs, oldVal, oldObj != nil)...)
 	}
 
 	return errs
@@ -2033,6 +2661,421 @@ func Validate_RunWorkloadRequest(
 		}
 		oldVal := safe.Field(oldObj,
 			func(oldObj *ateworkerpb.RunWorkloadRequest) *ateworkerpb.ActorDirs {
+				return oldObj.ActorDirs
+			})
+		errs = append(errs, fn(fldPath.Child("actor_dirs"), obj.ActorDirs, oldVal, oldObj != nil)...)
+	}
+
+	return errs
+}
+
+// Validate_SeedWorkloadRequest validates an instance of SeedWorkloadRequest according
+// to declarative validation rules in the API schema.
+func Validate_SeedWorkloadRequest(
+	ctx context.Context, op operation.Operation, fldPath *field.Path,
+	obj, oldObj *ateworkerpb.SeedWorkloadRequest) (errs field.ErrorList) {
+
+	{ // field ateworkerpb.SeedWorkloadRequest.Atespace
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.Atespace
+			})
+		errs = append(errs, fn(fldPath.Child("atespace"), &obj.Atespace, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.ActorName
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.ActorName
+			})
+		errs = append(errs, fn(fldPath.Child("actor_name"), &obj.ActorName, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.ActorUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.ActorUid
+			})
+		errs = append(errs, fn(fldPath.Child("actor_uid"), &obj.ActorUid, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.ActorTemplateAtespace
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.ActorTemplateAtespace
+			})
+		errs = append(errs, fn(fldPath.Child("actor_template_atespace"), &obj.ActorTemplateAtespace, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.ActorTemplateName
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.ShortName(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.ActorTemplateName
+			})
+		errs = append(errs, fn(fldPath.Child("actor_template_name"), &obj.ActorTemplateName, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.TemplateUid
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.UUID(ctx, op, fldPath, obj, oldObj); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.TemplateUid
+			})
+		errs = append(errs, fn(fldPath.Child("template_uid"), &obj.TemplateUid, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.RunscPath
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.MaxLength(ctx, op, fldPath, obj, oldObj, 4096); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.RunscPath
+			})
+		errs = append(errs, fn(fldPath.Child("runsc_path"), &obj.RunscPath, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.Spec
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.WorkloadSpec,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			func() { // cohort = "containers"
+				earlyReturn := false
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual, validate.RequiredSlice).MarkShortCircuit(); len(e) != 0 {
+					errs = append(errs, e...)
+					earlyReturn = true
+				}
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual,
+					func(ctx context.Context, op operation.Operation, fldPath *field.Path, obj, oldObj []*ateworkerpb.Container) field.ErrorList {
+						return validate.MaxItems(ctx, op, fldPath, obj, oldObj, 10)
+					}).MarkShortCircuit(); len(e) != 0 {
+					earlyReturn = true
+				}
+				if e := validate.Subfield(ctx, op, fldPath, obj, oldObj, "containers",
+					func(o *ateworkerpb.WorkloadSpec) []*ateworkerpb.Container { return o.Containers }, ateDeepEqual, validate.OptionalSlice).MarkShortCircuit(); len(e) != 0 {
+					earlyReturn = true
+				}
+				if earlyReturn {
+					return // do not proceed
+				}
+			}()
+			// call the type's validation function
+			errs = append(errs, Validate_WorkloadSpec(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *ateworkerpb.WorkloadSpec {
+				return oldObj.Spec
+			})
+		errs = append(errs, fn(fldPath.Child("spec"), obj.Spec, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.RootfsImagePath
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.MaxLength(ctx, op, fldPath, obj, oldObj, 4096); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.RootfsImagePath
+			})
+		errs = append(errs, fn(fldPath.Child("rootfs_image_path"), &obj.RootfsImagePath, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.RootfsSha256
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *string,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if obj == oldObj || (obj != nil && oldObj != nil && *obj == *oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredValue(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			if e := validate.MaxLength(ctx, op, fldPath, obj, oldObj, 64); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			if e := validate.MinLength(ctx, op, fldPath, obj, oldObj, 64); len(e) != 0 {
+				errs = append(errs, e...)
+			}
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *string {
+				return &oldObj.RootfsSha256
+			})
+		errs = append(errs, fn(fldPath.Child("rootfs_sha256"), &obj.RootfsSha256, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.Resources
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.ResourceRequirements,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_ResourceRequirements(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *ateworkerpb.ResourceRequirements {
+				return oldObj.Resources
+			})
+		errs = append(errs, fn(fldPath.Child("resources"), obj.Resources, oldVal, oldObj != nil)...)
+	}
+
+	{ // field ateworkerpb.SeedWorkloadRequest.ActorDirs
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.ActorDirs,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.RequiredPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				errs = append(errs, e...)
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_ActorDirs(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.SeedWorkloadRequest) *ateworkerpb.ActorDirs {
 				return oldObj.ActorDirs
 			})
 		errs = append(errs, fn(fldPath.Child("actor_dirs"), obj.ActorDirs, oldVal, oldObj != nil)...)
