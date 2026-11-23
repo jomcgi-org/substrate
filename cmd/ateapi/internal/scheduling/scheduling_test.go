@@ -798,3 +798,154 @@ func TestHasRoomBooksRuntimeOverhead(t *testing.T) {
 		t.Error("HasRoom() = false with room for the actor and its overhead, want true")
 	}
 }
+
+// withForkOverhead sets the fork overhead on the worker's default runtime.
+func withForkOverhead(o *ateapi.RuntimeOverhead) func(*ateapi.Worker) {
+	return func(w *ateapi.Worker) {
+		w.Status.SandboxClasses[0].DefaultRuntime.ForkOverhead = o
+	}
+}
+
+// withSeed gives the worker a ready seed.
+func withSeed(atespace, templateUID string, epoch int64) func(*ateapi.Worker) {
+	return func(w *ateapi.Worker) {
+		w.Status.Seeds = append(w.Status.Seeds, &ateapi.WorkerSeed{
+			SeedActor:    &ateapi.ObjectRef{Atespace: atespace, Name: "seed-" + templateUID},
+			SeedActorUid: "seed-uid-" + templateUID,
+			TemplateUid:  templateUID,
+			WorkerEpoch:  epoch,
+		})
+	}
+}
+
+func named(name string) func(*ateapi.Worker) {
+	return func(w *ateapi.Worker) {
+		w.Metadata = &ateapi.ResourceMetadata{Name: name}
+	}
+}
+
+func TestScheduleFork(t *testing.T) {
+	limits := &ateapi.Resources{CpuMillicores: 500, MemoryBytes: 256 << 20}
+	seedFor := func(atespace, uid string) *SeedRequirement {
+		return &SeedRequirement{Atespace: atespace, TemplateUID: uid}
+	}
+	tests := []struct {
+		name        string
+		fleet       fleet
+		constraints Constraints
+		wantPod     string // "" means ErrNoCapacity expected
+	}{{
+		name: "a forked actor needs a ready seed of its template",
+		fleet: fleet{
+			worker("w-no-seed", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30)),
+			worker("w-other-template", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), withSeed("team-a", "tmpl-2", 1)),
+			worker("w-seeded", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), withSeed("team-a", "tmpl-1", 1)),
+		},
+		constraints: Constraints{RequiredSeed: seedFor("team-a", "tmpl-1"), Limits: limits},
+		wantPod:     "w-seeded",
+	}, {
+		name: "a seed of another atespace does not match",
+		fleet: fleet{
+			worker("w-other-atespace", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), withSeed("team-b", "tmpl-1", 1)),
+		},
+		constraints: Constraints{RequiredSeed: seedFor("team-a", "tmpl-1"), Limits: limits},
+	}, {
+		name: "a seed of an earlier worker process does not match",
+		fleet: fleet{
+			worker("w-stale", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), withSeed("team-a", "tmpl-1", 0)),
+		},
+		constraints: Constraints{RequiredSeed: seedFor("team-a", "tmpl-1"), Limits: limits},
+	}, {
+		name: "a seed on a full worker has no room",
+		fleet: fleet{
+			worker("w-full", "gvisor", "node-a", nil, withMaxActors(1), withSeed("team-a", "tmpl-1", 1), assigned("team-a", "seed")),
+		},
+		constraints: Constraints{RequiredSeed: seedFor("team-a", "tmpl-1"), Limits: limits},
+	}, {
+		name: "a required worker is the only candidate",
+		fleet: fleet{
+			worker("w-1", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), named("w-1")),
+			worker("w-2", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), named("w-2")),
+		},
+		constraints: Constraints{RequiredWorker: "w-2", Limits: limits},
+		wantPod:     "w-2",
+	}, {
+		name: "a required worker that is missing has no capacity",
+		fleet: fleet{
+			worker("w-1", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), named("w-1")),
+		},
+		constraints: Constraints{RequiredWorker: "w-9", Limits: limits},
+	}, {
+		name: "constraints without a seed ignore seeds",
+		fleet: fleet{
+			worker("w-seeded", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30), withSeed("team-a", "tmpl-1", 1)),
+		},
+		constraints: Constraints{Limits: limits},
+		wantPod:     "w-seeded",
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := New(tt.fleet).Schedule(context.Background(), tt.constraints)
+			if tt.wantPod == "" {
+				if !errors.Is(err, ErrNoCapacity) {
+					t.Fatalf("Schedule() = %v, %v, want ErrNoCapacity", got.GetWorkerPod(), err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Schedule() error = %v", err)
+			}
+			if got.GetWorkerPod() != tt.wantPod {
+				t.Errorf("Schedule() = %q, want %q", got.GetWorkerPod(), tt.wantPod)
+			}
+		})
+	}
+}
+
+func TestBookingFork(t *testing.T) {
+	limits := &ateapi.Resources{CpuMillicores: 500, MemoryBytes: 256 << 20}
+	w := worker("w", "gvisor", "node-a", nil, withMaxActors(10), withCapacity(8000, 8<<30),
+		withOverhead(&ateapi.RuntimeOverhead{MemoryBytes: 64 << 20}),
+		withForkOverhead(&ateapi.RuntimeOverhead{MemoryBytes: 16 << 20}),
+		withSeed("team-a", "tmpl-1", 1))
+	tests := []struct {
+		name        string
+		constraints Constraints
+		want        int64
+	}{
+		{"a seed books the actor overhead", Constraints{Limits: limits, RequiredWorker: "w"}, 256<<20 + 64<<20},
+		{"a forked actor books the fork overhead", Constraints{Limits: limits, RequiredSeed: &SeedRequirement{Atespace: "team-a", TemplateUID: "tmpl-1"}}, 256<<20 + 16<<20},
+		{"an ordinary actor books the actor overhead", Constraints{Limits: limits}, 256<<20 + 64<<20},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := Booking(w, tt.constraints)
+			if !ok || got.GetMemoryBytes() != tt.want {
+				t.Errorf("Booking() = %v, %v, want %d memory bytes", got, ok, tt.want)
+			}
+		})
+	}
+	noForkOverhead := worker("plain", "gvisor", "node-a", nil, withOverhead(&ateapi.RuntimeOverhead{MemoryBytes: 64 << 20}))
+	if got, ok := Booking(noForkOverhead, Constraints{Limits: limits, RequiredSeed: &SeedRequirement{}}); !ok || !proto.Equal(got, limits) {
+		t.Errorf("Booking() without a fork overhead = %v, %v, want the limits %v", got, ok, limits)
+	}
+}
+
+func TestForkCapable(t *testing.T) {
+	tests := []struct {
+		name string
+		w    *ateapi.Worker
+		want bool
+	}{
+		{"reports a fork overhead", worker("w", "gvisor", "n", nil, withForkOverhead(&ateapi.RuntimeOverhead{MemoryBytes: 1})), true},
+		{"reports none", worker("w", "gvisor", "n", nil), false},
+		{"has not reported its runtimes", worker("w", "", "n", nil), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ForkCapable(tt.w); got != tt.want {
+				t.Errorf("ForkCapable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

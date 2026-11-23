@@ -64,6 +64,25 @@ type Constraints struct {
 	// Limits are the actor's declared resource limits, in the units a Worker
 	// reports its capacity in, so the two subtract.
 	Limits *ateapi.Resources
+
+	// RequiredWorker, when set, restricts placement to the Worker with this
+	// name. A seed sandbox lives in one worker process, so it is placed on the
+	// Worker it was created for.
+	RequiredWorker string
+
+	// RequiredSeed, when set, is the seed a forked actor starts from. It
+	// restricts placement to Workers with a ready seed for it, and books the
+	// actor with the runtime's fork overhead in place of its actor overhead.
+	RequiredSeed *SeedRequirement
+}
+
+// SeedRequirement names the seed a forked actor needs on its Worker.
+type SeedRequirement struct {
+	// Atespace is the atespace of the forked actor. A seed serves one atespace
+	// only, so a Worker holding a seed of another atespace does not match.
+	Atespace string
+	// TemplateUID is the UID of the ActorTemplate the seed is built from.
+	TemplateUID string
 }
 
 // ErrNoCapacity is returned by Schedule when no worker that meets the
@@ -249,6 +268,13 @@ func (s *scheduler) Applies(worker *ateapi.Worker, constraints Constraints) bool
 		return false
 	}
 
+	if constraints.RequiredWorker != "" && worker.GetMetadata().GetName() != constraints.RequiredWorker {
+		return false
+	}
+	if constraints.RequiredSeed != nil && SeedFor(worker, constraints.RequiredSeed) == nil {
+		return false
+	}
+
 	if !constraints.RequiredRuntime.WorkerMatches(worker.GetStatus()) {
 		return false
 	}
@@ -272,11 +298,38 @@ func (s *scheduler) HasRoom(worker *ateapi.Worker, constraints Constraints) bool
 	return ok
 }
 
+// SeedFor returns the ready seed of worker that satisfies req, or nil. A seed
+// counts only while the worker process that holds it is the registered one,
+// since the seed lives in that process and is gone with it.
+func SeedFor(worker *ateapi.Worker, req *SeedRequirement) *ateapi.WorkerSeed {
+	status := worker.GetStatus()
+	for _, seed := range status.GetSeeds() {
+		if seed.GetTemplateUid() == req.TemplateUID &&
+			seed.GetSeedActor().GetAtespace() == req.Atespace &&
+			seed.GetWorkerEpoch() == status.GetRegisteredEpoch() {
+			return seed
+		}
+	}
+	return nil
+}
+
+// ForkCapable reports whether worker's runtime reports a fork overhead, which
+// only a worker that can hold seeds and fork from them does.
+func ForkCapable(worker *ateapi.Worker) bool {
+	classes := worker.GetStatus().GetSandboxClasses()
+	return Registered(worker) && len(classes) > 0 && classes[0].GetDefaultRuntime().GetForkOverhead() != nil
+}
+
 // Booking is what an actor takes from the worker's capacity: its limits plus
-// the overhead of the worker runtime it would run under there. It reports
+// the overhead of the worker runtime it would run under there. A forked actor
+// pays the runtime's fork overhead in place of its actor overhead. It reports
 // false when that doesn't fit in an int64, and the actor doesn't fit on the worker.
 func Booking(worker *ateapi.Worker, constraints Constraints) (*ateapi.Resources, bool) {
-	overhead := constraints.SnapshotRuntime.WorkerRuntimeFor(worker.GetStatus()).GetActorOverhead()
+	runtime := constraints.SnapshotRuntime.WorkerRuntimeFor(worker.GetStatus())
+	overhead := runtime.GetActorOverhead()
+	if constraints.RequiredSeed != nil {
+		overhead = runtime.GetForkOverhead()
+	}
 	if overhead == nil {
 		return constraints.Limits, true
 	}
