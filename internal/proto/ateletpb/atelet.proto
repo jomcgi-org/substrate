@@ -723,6 +723,13 @@ message ForkRequest {
   // +k8s:minimum=1
   // +k8s:maximum=3600 # matches ateapi.ForkConfig.max_lifetime_seconds
   int32 max_lifetime_seconds = 16;
+
+  // The egress gateway of the forked actor, set when the template's
+  // `fork_config.egress` is `FORK_EGRESS_GATEWAY`. When absent the actor has
+  // no egress: its TCP is captured and refused.
+  //
+  // +k8s:optional
+  optional EgressGateway egress_gateway = 17;
 }
 
 message ForkResponse {

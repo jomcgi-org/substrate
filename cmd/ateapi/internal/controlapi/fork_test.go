@@ -726,3 +726,28 @@ func TestDeleteActorTemplate_DeletesSeeds(t *testing.T) {
 		t.Logf("DropSeed calls = %d", drops)
 	}
 }
+
+// A forked actor gets the default egress gateway only when its template asks
+// for FORK_EGRESS_GATEWAY, and none when the control plane has no gateway.
+func TestForkEgressGateway(t *testing.T) {
+	const gateway = "egress.ate-system.svc:8443"
+	for _, tc := range []struct {
+		name    string
+		address string
+		egress  ateapi.ForkEgress
+		want    string
+	}{
+		{name: "unspecified", address: gateway, egress: ateapi.ForkEgress_FORK_EGRESS_UNSPECIFIED},
+		{name: "none", address: gateway, egress: ateapi.ForkEgress_FORK_EGRESS_NONE},
+		{name: "gateway", address: gateway, egress: ateapi.ForkEgress_FORK_EGRESS_GATEWAY, want: gateway},
+		{name: "gateway without a configured gateway", egress: ateapi.ForkEgress_FORK_EGRESS_GATEWAY},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &ActorWorkflow{egressGatewayAddress: tc.address}
+			got := w.forkEgressGateway(&ateapi.ForkConfig{Egress: tc.egress})
+			if got.GetAddress() != tc.want || (got == nil) != (tc.want == "") {
+				t.Errorf("forkEgressGateway() = %v, want address %q", got, tc.want)
+			}
+		})
+	}
+}

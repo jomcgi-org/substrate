@@ -146,11 +146,22 @@ func (w *ActorWorkflow) ensureAteletForked(ctx context.Context, actorRef resourc
 		PidsLimit:             fork.GetPidsLimit(),
 		LogBytesLimit:         fork.GetLogBytesLimit(),
 		MaxLifetimeSeconds:    fork.GetMaxLifetimeSeconds(),
+		EgressGateway:         w.forkEgressGateway(fork),
 	})
 	if err != nil {
 		return tele, 0, handleAteletError(ctx, w.store, actorRef, ateattr.OperationResume, "Fork", false, err)
 	}
 	return tele, resp.GetWorkerEpoch(), nil
+}
+
+// forkEgressGateway is the gateway a forked actor's egress goes through: the
+// default gateway when the template asks for FORK_EGRESS_GATEWAY, else none, so
+// the actor's TCP is captured and refused.
+func (w *ActorWorkflow) forkEgressGateway(fork *ateapi.ForkConfig) *ateletpb.EgressGateway {
+	if fork.GetEgress() != ateapi.ForkEgress_FORK_EGRESS_GATEWAY {
+		return nil
+	}
+	return w.egressGateway()
 }
 
 // updateWorkerSeeds applies mutate to the seeds of the named Worker and

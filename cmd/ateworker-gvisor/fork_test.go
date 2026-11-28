@@ -68,6 +68,7 @@ type fakeHost struct {
 	hosted   []string
 	unhosted []string
 	active   []string
+	gateways []*ateworkerpb.EgressGateway
 	hostErr  error
 	probeErr error
 	onProbe  func()
@@ -75,13 +76,14 @@ type fakeHost struct {
 	holdProbe bool
 }
 
-func (h *fakeHost) Host(_ context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64) (string, error) {
+func (h *fakeHost) Host(_ context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64, gateway *ateworkerpb.EgressGateway) (string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.hostErr != nil {
 		return "", h.hostErr
 	}
 	h.hosted = append(h.hosted, actor.UID)
+	h.gateways = append(h.gateways, gateway)
 	return "/proc/1/fd/9", nil
 }
 
@@ -312,6 +314,34 @@ func TestForkManagerSeedAndFork(t *testing.T) {
 	}
 	if !f.m.owns(forkTestChildUID) || !f.m.owns(forkTestSeedUID) {
 		t.Error("the manager does not own the seed and child it started")
+	}
+}
+
+// The manager hosts a forked actor with the request's egress gateway, and with
+// none when the request has none.
+func TestForkManagerHostsWithTheEgressGateway(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		gateway *ateworkerpb.EgressGateway
+	}{
+		{name: "none"},
+		{name: "gateway", gateway: &ateworkerpb.EgressGateway{Address: "egress.ate-system.svc:8443"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newForkFixture(t)
+			f.seed()
+			req := f.forkRequest()
+			req.EgressGateway = tc.gateway
+			if err := f.m.fork(t.Context(), req, forkTestEpoch); err != nil {
+				t.Fatalf("fork() = %v", err)
+			}
+			if len(f.host.gateways) != 1 {
+				t.Fatalf("host was called %d times, want once", len(f.host.gateways))
+			}
+			if got := f.host.gateways[0]; got.GetAddress() != tc.gateway.GetAddress() || (got == nil) != (tc.gateway == nil) {
+				t.Errorf("host got gateway %v, want %v", got, tc.gateway)
+			}
+		})
 	}
 }
 

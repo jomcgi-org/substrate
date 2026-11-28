@@ -325,6 +325,7 @@ func (s *Atelet) Fork(ctx context.Context, req *ateletpb.ForkRequest) (*ateletpb
 		LogBytesLimit:         req.GetLogBytesLimit(),
 		MaxLifetimeSeconds:    req.GetMaxLifetimeSeconds(),
 		ActorDirs:             ateletpath.ActorDirs(actorUID),
+		EgressGateway:         toWorkerEgressGateway(req.GetEgressGateway()),
 	})
 	if err != nil {
 		// The sandbox record stays, so a Terminate can find what to tear down.

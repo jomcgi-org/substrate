@@ -55,12 +55,7 @@ func validateForkTemplate(fldPath *field.Path, tmpl *ateapi.ActorTemplate) field
 	if fork == nil {
 		return nil
 	}
-	forkPath := fldPath.Child("fork_config")
 	var errs field.ErrorList
-	if fork.GetEgress() == ateapi.ForkEgress_FORK_EGRESS_GATEWAY {
-		errs = append(errs, field.NotSupported(forkPath.Child("egress"), fork.GetEgress().String(),
-			[]string{ateapi.ForkEgress_FORK_EGRESS_UNSPECIFIED.String(), ateapi.ForkEgress_FORK_EGRESS_NONE.String()}))
-	}
 	if len(tmpl.GetContainers()) != 1 {
 		errs = append(errs, field.Invalid(fldPath.Child("containers"), len(tmpl.GetContainers()), "a template with fork_config needs exactly one container"))
 	}

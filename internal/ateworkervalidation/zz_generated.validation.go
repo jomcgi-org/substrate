@@ -1597,6 +1597,36 @@ func Validate_ForkWorkloadRequest(
 		errs = append(errs, fn(fldPath.Child("actor_dirs"), obj.ActorDirs, oldVal, oldObj != nil)...)
 	}
 
+	{ // field ateworkerpb.ForkWorkloadRequest.EgressGateway
+		fn := func(
+			fldPath *field.Path,
+			obj, oldObj *ateworkerpb.EgressGateway,
+			oldValueCorrelated bool) (errs field.ErrorList) {
+			// don't revalidate unchanged data
+			if oldValueCorrelated && op.Type == operation.Update {
+				if ateDeepEqual(obj, oldObj) {
+					return nil
+				}
+			}
+			// call field-attached validations
+			earlyReturn := false
+			if e := validate.OptionalPointer(ctx, op, fldPath, obj, oldObj).MarkShortCircuit(); len(e) != 0 {
+				earlyReturn = true
+			}
+			if earlyReturn {
+				return // do not proceed
+			}
+			// call the type's validation function
+			errs = append(errs, Validate_EgressGateway(ctx, op, fldPath, obj, oldObj)...)
+			return
+		}
+		oldVal := safe.Field(oldObj,
+			func(oldObj *ateworkerpb.ForkWorkloadRequest) *ateworkerpb.EgressGateway {
+				return oldObj.EgressGateway
+			})
+		errs = append(errs, fn(fldPath.Child("egress_gateway"), obj.EgressGateway, oldVal, oldObj != nil)...)
+	}
+
 	return errs
 }
 

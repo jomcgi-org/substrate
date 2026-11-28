@@ -377,8 +377,10 @@ const (
 	// FORK_EGRESS_NONE gives the actor no egress: its TCP is captured and
 	// refused, and DNS is refused.
 	ForkEgress_FORK_EGRESS_NONE ForkEgress = 1
-	// FORK_EGRESS_GATEWAY sends the actor's egress through the egress gateway.
-	// The API rejects it for now.
+	// FORK_EGRESS_GATEWAY sends the actor's egress through the egress gateway,
+	// under the actor's own certificate and egress policy. The control plane
+	// sends no gateway when it has none configured, so the actor then has no
+	// egress.
 	ForkEgress_FORK_EGRESS_GATEWAY ForkEgress = 2 // Keep this in sync with ForkConfig.egress's maximum.
 )
 

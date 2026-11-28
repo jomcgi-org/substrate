@@ -583,6 +583,11 @@ message ForkWorkloadRequest {
 
   // +k8s:required
   ActorDirs actor_dirs = 15;
+
+  // When absent the actor has no egress: its TCP is captured and refused.
+  //
+  // +k8s:optional
+  optional EgressGateway egress_gateway = 16;
 }
 
 message ForkWorkloadResponse {

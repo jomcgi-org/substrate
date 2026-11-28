@@ -221,7 +221,7 @@ type realHost struct {
 	hostMS []float64
 }
 
-func (h *realHost) Host(ctx context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64) (string, error) {
+func (h *realHost) Host(ctx context.Context, actor resources.ActorAttribution, _ *ateworkerpb.ActorDirs, _ int64, _ *ateworkerpb.EgressGateway) (string, error) {
 	start := time.Now()
 	session, err := actornet.ServeSandbox(ctx, actornet.SandboxNetworkConfig{ActorUID: actor.UID, Veth: true, EgressPort: 15001}, nil, nil)
 	if err != nil {

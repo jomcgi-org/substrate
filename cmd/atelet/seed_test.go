@@ -382,6 +382,28 @@ func TestFork(t *testing.T) {
 	if _, err := readSandboxRecord(forkUID); err != nil {
 		t.Errorf("a forked actor has no sandbox record for Terminate: %v", err)
 	}
+	if req.EgressGateway != nil {
+		t.Errorf("fork egress gateway = %v, want none when the request has none", req.GetEgressGateway())
+	}
+}
+
+// Fork passes the request's egress gateway to the worker.
+func TestForkPassesTheEgressGateway(t *testing.T) {
+	f := newSeedFixture(t)
+	if _, err := f.s.Seed(t.Context(), f.seedRequest(t)); err != nil {
+		t.Fatal(err)
+	}
+	req := f.forkRequest(t)
+	req.EgressGateway = &ateletpb.EgressGateway{Address: "egress.ate-system.svc:8443"}
+	if _, err := f.s.Fork(t.Context(), req); err != nil {
+		t.Fatalf("Fork() = %v", err)
+	}
+	if len(f.worker.forks) != 1 {
+		t.Fatalf("worker saw %d ForkWorkload calls, want 1", len(f.worker.forks))
+	}
+	if got := f.worker.forks[0].GetEgressGateway().GetAddress(); got != "egress.ate-system.svc:8443" {
+		t.Errorf("worker egress gateway = %q, want the request's", got)
+	}
 }
 
 // Fork refuses a seed that was not built for the request, whoever asks.

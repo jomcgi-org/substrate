@@ -86,7 +86,6 @@ func TestValidateCreateActorTemplateRequest_ForkConfig(t *testing.T) {
 		mutate: []func(*ateapi.ActorTemplate){func(tmpl *ateapi.ActorTemplate) {
 			tmpl.ForkConfig.Egress = ateapi.ForkEgress_FORK_EGRESS_GATEWAY
 		}},
-		want: field.ErrorList{field.NotSupported[string](fork.Child("egress"), "", nil)},
 	}, {
 		name:  "missing mode",
 		gates: "ForkSeed",

@@ -1586,7 +1586,11 @@ type ForkWorkloadRequest struct {
 	// +k8s:maximum=3600 # matches ateapi.ForkConfig.max_lifetime_seconds
 	MaxLifetimeSeconds int32 `protobuf:"varint,14,opt,name=max_lifetime_seconds,json=maxLifetimeSeconds,proto3" json:"max_lifetime_seconds,omitempty"`
 	// +k8s:required
-	ActorDirs     *ActorDirs `protobuf:"bytes,15,opt,name=actor_dirs,json=actorDirs,proto3" json:"actor_dirs,omitempty"`
+	ActorDirs *ActorDirs `protobuf:"bytes,15,opt,name=actor_dirs,json=actorDirs,proto3" json:"actor_dirs,omitempty"`
+	// When absent the actor has no egress: its TCP is captured and refused.
+	//
+	// +k8s:optional
+	EgressGateway *EgressGateway `protobuf:"bytes,16,opt,name=egress_gateway,json=egressGateway,proto3,oneof" json:"egress_gateway,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1722,6 +1726,13 @@ func (x *ForkWorkloadRequest) GetMaxLifetimeSeconds() int32 {
 func (x *ForkWorkloadRequest) GetActorDirs() *ActorDirs {
 	if x != nil {
 		return x.ActorDirs
+	}
+	return nil
+}
+
+func (x *ForkWorkloadRequest) GetEgressGateway() *EgressGateway {
+	if x != nil {
+		return x.EgressGateway
 	}
 	return nil
 }
@@ -2794,7 +2805,7 @@ const file_internal_proto_ateworkerpb_ateworker_proto_rawDesc = "" +
 	"\n" +
 	"actor_dirs\x18\f \x01(\v2\x14.ateworker.ActorDirsR\tactorDirs\"9\n" +
 	"\x14SeedWorkloadResponse\x12!\n" +
-	"\fworker_epoch\x18\x01 \x01(\x03R\vworkerEpoch\"\xfb\x04\n" +
+	"\fworker_epoch\x18\x01 \x01(\x03R\vworkerEpoch\"\xd4\x05\n" +
 	"\x13ForkWorkloadRequest\x12\x1a\n" +
 	"\batespace\x18\x01 \x01(\tR\batespace\x12\x1d\n" +
 	"\n" +
@@ -2814,7 +2825,9 @@ const file_internal_proto_ateworkerpb_ateworker_proto_rawDesc = "" +
 	"\x0flog_bytes_limit\x18\r \x01(\x03R\rlogBytesLimit\x120\n" +
 	"\x14max_lifetime_seconds\x18\x0e \x01(\x05R\x12maxLifetimeSeconds\x123\n" +
 	"\n" +
-	"actor_dirs\x18\x0f \x01(\v2\x14.ateworker.ActorDirsR\tactorDirs\"9\n" +
+	"actor_dirs\x18\x0f \x01(\v2\x14.ateworker.ActorDirsR\tactorDirs\x12D\n" +
+	"\x0eegress_gateway\x18\x10 \x01(\v2\x18.ateworker.EgressGatewayH\x00R\regressGateway\x88\x01\x01B\x11\n" +
+	"\x0f_egress_gateway\"9\n" +
 	"\x14ForkWorkloadResponse\x12!\n" +
 	"\fworker_epoch\x18\x01 \x01(\x03R\vworkerEpoch\"i\n" +
 	"\x0fDropSeedRequest\x12\x1a\n" +
@@ -2983,41 +2996,42 @@ var file_internal_proto_ateworkerpb_ateworker_proto_depIdxs = []int32{
 	7,  // 21: ateworker.ForkWorkloadRequest.spec:type_name -> ateworker.WorkloadSpec
 	11, // 22: ateworker.ForkWorkloadRequest.resources:type_name -> ateworker.ResourceRequirements
 	2,  // 23: ateworker.ForkWorkloadRequest.actor_dirs:type_name -> ateworker.ActorDirs
-	7,  // 24: ateworker.CheckpointWorkloadRequest.spec:type_name -> ateworker.WorkloadSpec
-	0,  // 25: ateworker.CheckpointWorkloadRequest.fidelity:type_name -> ateworker.SnapshotFidelity
-	2,  // 26: ateworker.CheckpointWorkloadRequest.actor_dirs:type_name -> ateworker.ActorDirs
-	7,  // 27: ateworker.RestoreWorkloadRequest.spec:type_name -> ateworker.WorkloadSpec
-	33, // 28: ateworker.RestoreWorkloadRequest.runtime_asset_paths:type_name -> ateworker.RestoreWorkloadRequest.RuntimeAssetPathsEntry
-	0,  // 29: ateworker.RestoreWorkloadRequest.fidelity:type_name -> ateworker.SnapshotFidelity
-	6,  // 30: ateworker.RestoreWorkloadRequest.egress_gateway:type_name -> ateworker.EgressGateway
-	11, // 31: ateworker.RestoreWorkloadRequest.resources:type_name -> ateworker.ResourceRequirements
-	2,  // 32: ateworker.RestoreWorkloadRequest.actor_dirs:type_name -> ateworker.ActorDirs
-	1,  // 33: ateworker.WorkloadStatsSample.source:type_name -> ateworker.StatsSource
-	28, // 34: ateworker.GetWorkloadStatsResponse.sample:type_name -> ateworker.WorkloadStatsSample
-	28, // 35: ateworker.GetActiveWorkloadStatsResponse.samples:type_name -> ateworker.WorkloadStatsSample
-	5,  // 36: ateworker.Worker.RunWorkload:input_type -> ateworker.RunWorkloadRequest
-	23, // 37: ateworker.Worker.CheckpointWorkload:input_type -> ateworker.CheckpointWorkloadRequest
-	25, // 38: ateworker.Worker.RestoreWorkload:input_type -> ateworker.RestoreWorkloadRequest
-	27, // 39: ateworker.Worker.GetWorkloadStats:input_type -> ateworker.GetWorkloadStatsRequest
-	30, // 40: ateworker.Worker.GetActiveWorkloadStats:input_type -> ateworker.GetActiveWorkloadStatsRequest
-	3,  // 41: ateworker.Worker.TerminateWorkload:input_type -> ateworker.TerminateWorkloadRequest
-	16, // 42: ateworker.Worker.SeedWorkload:input_type -> ateworker.SeedWorkloadRequest
-	18, // 43: ateworker.Worker.ForkWorkload:input_type -> ateworker.ForkWorkloadRequest
-	20, // 44: ateworker.Worker.DropSeed:input_type -> ateworker.DropSeedRequest
-	22, // 45: ateworker.Worker.RunWorkload:output_type -> ateworker.RunWorkloadResponse
-	24, // 46: ateworker.Worker.CheckpointWorkload:output_type -> ateworker.CheckpointWorkloadResponse
-	26, // 47: ateworker.Worker.RestoreWorkload:output_type -> ateworker.RestoreWorkloadResponse
-	29, // 48: ateworker.Worker.GetWorkloadStats:output_type -> ateworker.GetWorkloadStatsResponse
-	31, // 49: ateworker.Worker.GetActiveWorkloadStats:output_type -> ateworker.GetActiveWorkloadStatsResponse
-	4,  // 50: ateworker.Worker.TerminateWorkload:output_type -> ateworker.TerminateWorkloadResponse
-	17, // 51: ateworker.Worker.SeedWorkload:output_type -> ateworker.SeedWorkloadResponse
-	19, // 52: ateworker.Worker.ForkWorkload:output_type -> ateworker.ForkWorkloadResponse
-	21, // 53: ateworker.Worker.DropSeed:output_type -> ateworker.DropSeedResponse
-	45, // [45:54] is the sub-list for method output_type
-	36, // [36:45] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	6,  // 24: ateworker.ForkWorkloadRequest.egress_gateway:type_name -> ateworker.EgressGateway
+	7,  // 25: ateworker.CheckpointWorkloadRequest.spec:type_name -> ateworker.WorkloadSpec
+	0,  // 26: ateworker.CheckpointWorkloadRequest.fidelity:type_name -> ateworker.SnapshotFidelity
+	2,  // 27: ateworker.CheckpointWorkloadRequest.actor_dirs:type_name -> ateworker.ActorDirs
+	7,  // 28: ateworker.RestoreWorkloadRequest.spec:type_name -> ateworker.WorkloadSpec
+	33, // 29: ateworker.RestoreWorkloadRequest.runtime_asset_paths:type_name -> ateworker.RestoreWorkloadRequest.RuntimeAssetPathsEntry
+	0,  // 30: ateworker.RestoreWorkloadRequest.fidelity:type_name -> ateworker.SnapshotFidelity
+	6,  // 31: ateworker.RestoreWorkloadRequest.egress_gateway:type_name -> ateworker.EgressGateway
+	11, // 32: ateworker.RestoreWorkloadRequest.resources:type_name -> ateworker.ResourceRequirements
+	2,  // 33: ateworker.RestoreWorkloadRequest.actor_dirs:type_name -> ateworker.ActorDirs
+	1,  // 34: ateworker.WorkloadStatsSample.source:type_name -> ateworker.StatsSource
+	28, // 35: ateworker.GetWorkloadStatsResponse.sample:type_name -> ateworker.WorkloadStatsSample
+	28, // 36: ateworker.GetActiveWorkloadStatsResponse.samples:type_name -> ateworker.WorkloadStatsSample
+	5,  // 37: ateworker.Worker.RunWorkload:input_type -> ateworker.RunWorkloadRequest
+	23, // 38: ateworker.Worker.CheckpointWorkload:input_type -> ateworker.CheckpointWorkloadRequest
+	25, // 39: ateworker.Worker.RestoreWorkload:input_type -> ateworker.RestoreWorkloadRequest
+	27, // 40: ateworker.Worker.GetWorkloadStats:input_type -> ateworker.GetWorkloadStatsRequest
+	30, // 41: ateworker.Worker.GetActiveWorkloadStats:input_type -> ateworker.GetActiveWorkloadStatsRequest
+	3,  // 42: ateworker.Worker.TerminateWorkload:input_type -> ateworker.TerminateWorkloadRequest
+	16, // 43: ateworker.Worker.SeedWorkload:input_type -> ateworker.SeedWorkloadRequest
+	18, // 44: ateworker.Worker.ForkWorkload:input_type -> ateworker.ForkWorkloadRequest
+	20, // 45: ateworker.Worker.DropSeed:input_type -> ateworker.DropSeedRequest
+	22, // 46: ateworker.Worker.RunWorkload:output_type -> ateworker.RunWorkloadResponse
+	24, // 47: ateworker.Worker.CheckpointWorkload:output_type -> ateworker.CheckpointWorkloadResponse
+	26, // 48: ateworker.Worker.RestoreWorkload:output_type -> ateworker.RestoreWorkloadResponse
+	29, // 49: ateworker.Worker.GetWorkloadStats:output_type -> ateworker.GetWorkloadStatsResponse
+	31, // 50: ateworker.Worker.GetActiveWorkloadStats:output_type -> ateworker.GetActiveWorkloadStatsResponse
+	4,  // 51: ateworker.Worker.TerminateWorkload:output_type -> ateworker.TerminateWorkloadResponse
+	17, // 52: ateworker.Worker.SeedWorkload:output_type -> ateworker.SeedWorkloadResponse
+	19, // 53: ateworker.Worker.ForkWorkload:output_type -> ateworker.ForkWorkloadResponse
+	21, // 54: ateworker.Worker.DropSeed:output_type -> ateworker.DropSeedResponse
+	46, // [46:55] is the sub-list for method output_type
+	37, // [37:46] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_internal_proto_ateworkerpb_ateworker_proto_init() }
@@ -3026,6 +3040,7 @@ func file_internal_proto_ateworkerpb_ateworker_proto_init() {
 		return
 	}
 	file_internal_proto_ateworkerpb_ateworker_proto_msgTypes[3].OneofWrappers = []any{}
+	file_internal_proto_ateworkerpb_ateworker_proto_msgTypes[16].OneofWrappers = []any{}
 	file_internal_proto_ateworkerpb_ateworker_proto_msgTypes[23].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

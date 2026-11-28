@@ -83,7 +83,7 @@ type forkdLauncher interface {
 type forkHost interface {
 	// Host builds the actor's network namespaces and returns the path forkd
 	// reads the child's links from.
-	Host(ctx context.Context, actor resources.ActorAttribution, dirs *ateworkerpb.ActorDirs, memoryBytes int64) (netnsPath string, err error)
+	Host(ctx context.Context, actor resources.ActorAttribution, dirs *ateworkerpb.ActorDirs, memoryBytes int64, gateway *ateworkerpb.EgressGateway) (netnsPath string, err error)
 	// Probe waits until the actor's containers pass their wakeup probes.
 	Probe(ctx context.Context, actorUID string, containers []*ateworkerpb.Container) error
 	// Activate makes the actor reachable through ingress.
@@ -434,7 +434,7 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 		TemplateName:     req.GetActorTemplateName(),
 	}
 	limits := sizing.FromLimits(req.GetResources().GetLimits())
-	netns, err := m.host.Host(ctx, actor, req.GetActorDirs(), limits.MemoryBytes)
+	netns, err := m.host.Host(ctx, actor, req.GetActorDirs(), limits.MemoryBytes, req.GetEgressGateway())
 	if err != nil {
 		return err
 	}
@@ -761,16 +761,22 @@ func (l execForkdLauncher) Launch(ctx context.Context, bins forkdBinaries) (*for
 // manager.
 type serviceForkHost struct{ s *AteWorkerService }
 
-func (h serviceForkHost) Host(ctx context.Context, actor resources.ActorAttribution, dirs *ateworkerpb.ActorDirs, memoryBytes int64) (string, error) {
+func (h serviceForkHost) Host(ctx context.Context, actor resources.ActorAttribution, dirs *ateworkerpb.ActorDirs, memoryBytes int64, gateway *ateworkerpb.EgressGateway) (string, error) {
 	if err := h.s.tunnel.Deactivate(ctx, actor); err != nil {
 		return "", err
 	}
-	// A forked actor has no egress: its TCP is captured and refused.
+	// Without a gateway a forked actor has no egress: its TCP is captured and
+	// refused. With one, the actor's certificate is minted before the sandbox
+	// starts, as for a booted actor, so its egress fails closed.
+	egress, err := h.s.tunnel.PrepareEgress(ctx, actor, gateway)
+	if err != nil {
+		return "", err
+	}
 	hosted, err := h.s.hostActor(ctx, actor, dirs, memoryBytes)
 	if err != nil {
 		return "", err
 	}
-	if err := h.s.tunnel.ActivateEgress(actor, nil); err != nil {
+	if err := h.s.tunnel.ActivateEgress(actor, egress); err != nil {
 		_ = h.s.unhostActor(ctx, actor.UID)
 		return "", err
 	}
