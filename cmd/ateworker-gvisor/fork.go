@@ -433,6 +433,18 @@ func (m *forkManager) fork(ctx context.Context, req *ateworkerpb.ForkWorkloadReq
 		TemplateAtespace: req.GetActorTemplateAtespace(),
 		TemplateName:     req.GetActorTemplateName(),
 	}
+	// A retried ForkWorkload for a child that already runs from this seed (the
+	// first call landed, its answer did not) is done. Hosting it again would
+	// tear down the running child's network and egress.
+	m.mu.Lock()
+	running, exists := m.children[actor.UID]
+	m.mu.Unlock()
+	if exists {
+		if running.seedUID != req.GetSeedActorUid() {
+			return apierror.AlreadyExists("actor %s already runs from seed %s", actor.UID, running.seedUID)
+		}
+		return nil
+	}
 	limits := sizing.FromLimits(req.GetResources().GetLimits())
 	netns, err := m.host.Host(ctx, actor, req.GetActorDirs(), limits.MemoryBytes, req.GetEgressGateway())
 	if err != nil {
@@ -774,9 +786,11 @@ func (h serviceForkHost) Host(ctx context.Context, actor resources.ActorAttribut
 	}
 	hosted, err := h.s.hostActor(ctx, actor, dirs, memoryBytes)
 	if err != nil {
+		egress.Close()
 		return "", err
 	}
 	if err := h.s.tunnel.ActivateEgress(actor, egress); err != nil {
+		egress.Close()
 		_ = h.s.unhostActor(ctx, actor.UID)
 		return "", err
 	}

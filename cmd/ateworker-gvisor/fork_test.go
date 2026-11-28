@@ -345,6 +345,24 @@ func TestForkManagerHostsWithTheEgressGateway(t *testing.T) {
 	}
 }
 
+// A retried fork of a child that already runs from the seed does nothing: it
+// must not host the child again, which would tear down its network and egress.
+func TestForkManagerRetriedForkIsANoOp(t *testing.T) {
+	f := newForkFixture(t)
+	f.seed()
+	f.fork()
+	f.fork()
+	if got := len(f.fake.ForkRequests()); got != 1 {
+		t.Errorf("forkd saw %d fork requests, want 1", got)
+	}
+	if len(f.host.hosted) != 1 || len(f.host.unhosted) != 0 {
+		t.Errorf("host calls: hosted %v, unhosted %v; want one host and no unhost", f.host.hosted, f.host.unhosted)
+	}
+	if !f.m.owns(forkTestChildUID) {
+		t.Error("the retry dropped the running child")
+	}
+}
+
 func TestForkManagerReportsExits(t *testing.T) {
 	signal := func(n int) forkd.ExitInfo { return forkd.ExitInfo{Reason: forkd.ReasonExited, Signal: n} }
 	tests := []struct {

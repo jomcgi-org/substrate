@@ -193,6 +193,15 @@ type ActorEgress struct {
 	expiresAt         time.Time
 }
 
+// Close releases a prepared egress that was never activated. It is safe on a
+// nil ActorEgress (no gateway).
+func (e *ActorEgress) Close() {
+	if e == nil || e.client == nil {
+		return
+	}
+	_ = e.client.Close()
+}
+
 // PrepareEgress mints the actor's certificate and builds its gateway client. A
 // nil gateway means the actor has no tunneled egress and yields a nil result.
 func (t *Tunnel) PrepareEgress(ctx context.Context, actor resources.ActorAttribution, gateway *ateworkerpb.EgressGateway) (*ActorEgress, error) {
